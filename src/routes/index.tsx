@@ -13,7 +13,6 @@ import {
   reminders,
   products,
 } from "@/lib/mock-data";
-import scanVisual from "@/assets/scan-visual.jpg";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -46,14 +45,6 @@ function Today() {
   return (
     <AppShell>
       <section className="surface glow-veil relative overflow-hidden p-6 sm:p-10">
-        <img
-          src={scanVisual}
-          alt=""
-          aria-hidden="true"
-          width={1024}
-          height={1024}
-          className="pointer-events-none absolute -top-10 -right-16 hidden w-[26rem] opacity-70 mix-blend-multiply md:block"
-        />
         <div className="relative max-w-xl">
           <p className="eyebrow">{profile.lastScan}</p>
           <h1 className="mt-3 text-4xl sm:text-5xl">Good morning, {profile.name.split(" ")[0]}.</h1>

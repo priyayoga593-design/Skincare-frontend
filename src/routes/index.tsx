@@ -186,9 +186,7 @@ function GuidanceList({
   tone: "sage" | "clay";
 }) {
   return (
-    <div
-      className={`rounded-xl p-4 ${tone === "sage" ? "bg-accent/60" : "bg-clay/20"}`}
-    >
+    <div className={`rounded-xl p-4 ${tone === "sage" ? "bg-accent/60" : "bg-clay/20"}`}>
       <p className="eyebrow">{title}</p>
       <ul className="mt-2 space-y-1 text-sm">
         {items.map((i) => (

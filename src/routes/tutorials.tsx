@@ -86,8 +86,8 @@ function TutorialsPage() {
               <p className="eyebrow">Before &amp; after simulation</p>
               <p className="mt-1.5 text-sm text-muted-foreground">
                 Following this routine consistently projects a{" "}
-                <span className="text-foreground">+11 skin health score</span> in 8 weeks, with
-                acne density down roughly 30%.
+                <span className="text-foreground">+11 skin health score</span> in 8 weeks, with acne
+                density down roughly 30%.
               </p>
             </div>
             <div className="rounded-xl bg-clay/20 p-4">

@@ -150,11 +150,8 @@
 }
 
 @utility glow-veil {
-  background-image: radial-gradient(
-      120% 90% at 12% 0%,
-      oklch(from var(--sage) l c h / 0.28) 0%,
-      transparent 55%
-    ),
+  background-image:
+    radial-gradient(120% 90% at 12% 0%, oklch(from var(--sage) l c h / 0.28) 0%, transparent 55%),
     radial-gradient(90% 80% at 95% 10%, oklch(from var(--clay) l c h / 0.24) 0%, transparent 60%);
 }
 

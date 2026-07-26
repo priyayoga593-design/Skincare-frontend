@@ -1,5 +1,13 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis, CartesianGrid } from "recharts";
+import {
+  Line,
+  LineChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+} from "recharts";
 import { TrendingUp } from "lucide-react";
 import { AppShell, PageHeader } from "@/components/app-shell";
 import { Badge } from "@/components/ui/badge";
@@ -34,7 +42,11 @@ function ProgressPage() {
       />
 
       <div className="grid gap-4 sm:grid-cols-3">
-        <Stat label="Skin health score" value={`${skinAnalysis.healthScore}`} delta="+16 in 6 wks" />
+        <Stat
+          label="Skin health score"
+          value={`${skinAnalysis.healthScore}`}
+          delta="+16 in 6 wks"
+        />
         <Stat label="Hydration" value="68%" delta="+27 pts" />
         <Stat label="Lifestyle score" value={`${habits.lifestyleScore}`} delta="+9 pts" />
       </div>
@@ -106,8 +118,16 @@ function ProgressPage() {
           <h2 className="text-xl">Before &amp; after</h2>
           <div className="mt-4 grid gap-4 sm:grid-cols-2">
             {[
-              { label: "Week 1", score: 58, notes: "Active breakouts on chin, dull tone, tight skin after cleansing." },
-              { label: "Week 6", score: 74, notes: "Fewer active lesions, marks fading, oil balanced by midday." },
+              {
+                label: "Week 1",
+                score: 58,
+                notes: "Active breakouts on chin, dull tone, tight skin after cleansing.",
+              },
+              {
+                label: "Week 6",
+                score: 74,
+                notes: "Fewer active lesions, marks fading, oil balanced by midday.",
+              },
             ].map((s) => (
               <div key={s.label} className="rounded-xl bg-muted p-5">
                 <p className="eyebrow">{s.label}</p>

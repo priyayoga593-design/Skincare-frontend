@@ -18,7 +18,8 @@ export const Route = createFileRoute("/assistant")({
       { property: "og:title", content: "AI Beauty Assistant — Lumea" },
       {
         property: "og:description",
-        content: "Ask about acne causes, shade matching and ingredient safety, grounded in your scan.",
+        content:
+          "Ask about acne causes, shade matching and ingredient safety, grounded in your scan.",
       },
     ],
   }),
@@ -38,9 +39,7 @@ function AssistantPage() {
 
   const send = (text: string) => {
     if (!text.trim()) return;
-    const known = assistantQuestions.find(
-      (q) => q.q.toLowerCase() === text.trim().toLowerCase(),
-    );
+    const known = assistantQuestions.find((q) => q.q.toLowerCase() === text.trim().toLowerCase());
     setMessages((m) => [
       ...m,
       { role: "user", text },

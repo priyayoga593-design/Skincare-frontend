@@ -106,7 +106,8 @@ export const products: Product[] = [
     rating: 4.5,
     reviews: 2841,
     match: 96,
-    reason: "Oily skin + moderate acne: 2% salicylic acid clears pore congestion without stripping.",
+    reason:
+      "Oily skin + moderate acne: 2% salicylic acid clears pore congestion without stripping.",
     ingredients: ["Salicylic Acid 2%", "Glycerin", "Zinc PCA"],
     benefits: ["Unclogs pores", "Controls oil", "Fragrance-free"],
     suitable: "Oily · Acne-prone · Fragrance allergy safe",
@@ -172,7 +173,8 @@ export const products: Product[] = [
     rating: 4.4,
     reviews: 1870,
     match: 94,
-    reason: "Shade matched to Medium depth with warm undertone; oil-control formula for your skin type.",
+    reason:
+      "Shade matched to Medium depth with warm undertone; oil-control formula for your skin type.",
     ingredients: ["Silica", "Niacinamide", "Vitamin E"],
     benefits: ["12h wear", "Blurs pores", "Transfer resistant"],
     suitable: "Medium · Warm undertone · Oily",

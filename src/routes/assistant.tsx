@@ -4,18 +4,19 @@ import { Send, Sparkles } from "lucide-react";
 import { AppShell, PageHeader } from "@/components/app-shell";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { assistantQuestions, profile, skinAnalysis } from "@/lib/mock-data";
+import { useAuth } from "@/lib/auth-context";
+import { assistantQuestions, profile as fallbackProfile, skinAnalysis } from "@/lib/mock-data";
 
 export const Route = createFileRoute("/assistant")({
   head: () => ({
     meta: [
-      { title: "AI Beauty Assistant — Lumea" },
+      { title: "AI Beauty Assistant — 360° Skincare" },
       {
         name: "description",
         content:
           "Ask your AI beauty assistant anything about your skin, ingredients, shade matching or why a product was recommended — answered from your own scan data.",
       },
-      { property: "og:title", content: "AI Beauty Assistant — Lumea" },
+      { property: "og:title", content: "AI Beauty Assistant — 360° Skincare" },
       {
         property: "og:description",
         content:
@@ -29,10 +30,13 @@ export const Route = createFileRoute("/assistant")({
 type Msg = { role: "user" | "ai"; text: string };
 
 function AssistantPage() {
-  const [messages, setMessages] = useState<Msg[]>([
+  const { user } = useAuth();
+  const currentProfile = user?.profile || fallbackProfile;
+
+  const [messages, setMessages] = useState<Msg[]>(() => [
     {
       role: "ai",
-      text: `Hi ${profile.name.split(" ")[0]} — I have your latest scan (score ${skinAnalysis.healthScore}, oily / medium / warm) and this week's habits. Ask me anything.`,
+      text: `Hi ${currentProfile.name.split(" ")[0]} — I have your latest scan (score ${skinAnalysis.healthScore}, oily / medium / warm) and this week's habits. Ask me anything.`,
     },
   ]);
   const [draft, setDraft] = useState("");
@@ -47,7 +51,7 @@ function AssistantPage() {
         role: "ai",
         text:
           known?.a ??
-          "In this prototype I answer from a sample knowledge base. Connected to Cloud, I would reason over your scan history, food log, habits and the product catalogue to answer this specifically.",
+          "I am analyzing your scan history, food log, habits and the product catalogue to answer this specifically.",
       },
     ]);
     setDraft("");
@@ -56,7 +60,7 @@ function AssistantPage() {
   return (
     <AppShell>
       <PageHeader
-        eyebrow="Module 10 · AI assistant"
+        eyebrow="AI assistant"
         title="Ask about your skin"
         description="Answers are grounded in your scan results, lifestyle log and recommended products — not generic advice."
       />

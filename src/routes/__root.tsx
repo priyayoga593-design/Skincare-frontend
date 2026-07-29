@@ -4,10 +4,16 @@ import {
   Link,
   createRootRouteWithContext,
   useRouter,
+  useLocation,
+  useNavigate,
   HeadContent,
   Scripts,
 } from "@tanstack/react-router";
 import { useEffect, type ReactNode } from "react";
+import { Sparkles } from "lucide-react";
+import { AuthProvider, useAuth } from "@/lib/auth-context";
+import { HealthProvider } from "@/lib/health-context";
+import { ScanProvider } from "@/lib/scan-context";
 
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
@@ -77,13 +83,13 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Lumea — AI Skincare & Beauty" },
+      { title: "360° Skincare — AI Skincare & Beauty" },
       {
         name: "description",
         content:
           "AI skin analysis, personalised routines, product matching and best-price shopping in one beauty companion.",
       },
-      { property: "og:title", content: "Lumea — AI Skincare & Beauty" },
+      { property: "og:title", content: "360° Skincare — AI Skincare & Beauty" },
       {
         property: "og:description",
         content:
@@ -127,13 +133,52 @@ function RootShell({ children }: { children: ReactNode }) {
   );
 }
 
+function RootGuard({ children }: { children: ReactNode }) {
+  const { isAuthenticated, isLoading } = useAuth();
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (!isLoading && !isAuthenticated && location.pathname !== "/auth") {
+      navigate({ to: "/auth" });
+    }
+  }, [isLoading, isAuthenticated, location.pathname, navigate]);
+
+  if (isLoading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background">
+        <div className="flex flex-col items-center gap-3">
+          <div className="size-10 rounded-xl bg-primary animate-pulse flex items-center justify-center text-primary-foreground">
+            <Sparkles className="size-5" />
+          </div>
+          <span className="text-sm text-muted-foreground font-display">360° Skincare...</span>
+        </div>
+      </div>
+    );
+  }
+
+  return <>{children}</>;
+}
+
+import { ReminderProvider } from "@/lib/reminder-context";
+
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
 
   return (
     <QueryClientProvider client={queryClient}>
-      {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
-      <Outlet />
+      <AuthProvider>
+        <RootGuard>
+          <HealthProvider>
+            <ScanProvider>
+              <ReminderProvider>
+                {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
+                <Outlet />
+              </ReminderProvider>
+            </ScanProvider>
+          </HealthProvider>
+        </RootGuard>
+      </AuthProvider>
     </QueryClientProvider>
   );
 }

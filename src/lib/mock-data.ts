@@ -75,7 +75,7 @@ export const routines = {
   ],
 };
 
-export type Store = { store: string; price: number; offer: string; best?: boolean };
+export type Store = { store: string; price: number; offer: string; best?: boolean; url: string };
 
 export type Product = {
   id: string;
@@ -92,6 +92,7 @@ export type Product = {
   benefits: string[];
   suitable: string;
   usage: string;
+  image: string;
   stores: Store[];
 };
 
@@ -106,6 +107,7 @@ export const products: Product[] = [
     rating: 4.5,
     reviews: 2841,
     match: 96,
+    image: "https://images.unsplash.com/photo-1556228578-0d85b1a4d571?q=80&w=600&auto=format&fit=crop",
     reason:
       "Oily skin + moderate acne: 2% salicylic acid clears pore congestion without stripping.",
     ingredients: ["Salicylic Acid 2%", "Glycerin", "Zinc PCA"],
@@ -113,10 +115,10 @@ export const products: Product[] = [
     suitable: "Oily · Acne-prone · Fragrance allergy safe",
     usage: "Twice daily · 1 pump · 30s massage",
     stores: [
-      { store: "Official Brand", price: 549, offer: "10% OFF" },
-      { store: "Nykaa", price: 499, offer: "Flat ₹50 OFF" },
-      { store: "Amazon", price: 479, offer: "15% OFF + cashback", best: true },
-      { store: "Flipkart", price: 489, offer: "Free delivery" },
+      { store: "Official Brand", price: 549, offer: "10% OFF", url: "https://example.com/brand/salicylic-wash" },
+      { store: "Nykaa", price: 499, offer: "Flat ₹50 OFF", url: "https://nykaa.com/salicylic-wash" },
+      { store: "Amazon", price: 479, offer: "15% OFF + cashback", best: true, url: "https://amazon.in/dp/B000SALIC" },
+      { store: "Flipkart", price: 489, offer: "Free delivery", url: "https://flipkart.com/salicylic-wash" },
     ],
   },
   {
@@ -129,16 +131,17 @@ export const products: Product[] = [
     rating: 4.6,
     reviews: 5120,
     match: 93,
+    image: "https://images.unsplash.com/photo-1620916566398-39f1143ab7be?q=80&w=600&auto=format&fit=crop",
     reason: "Targets your mild pigmentation and visible pores while regulating sebum.",
     ingredients: ["Niacinamide 10%", "Zinc 1%", "Panthenol"],
     benefits: ["Fades marks", "Refines pores", "Calms redness"],
     suitable: "Oily · Medium tone · Pigmentation",
     usage: "Morning · 3 drops · wait 60s before moisturiser",
     stores: [
-      { store: "Official Brand", price: 699, offer: "Buy 1 Get 1 mini" },
-      { store: "Nykaa", price: 649, offer: "12% OFF", best: true },
-      { store: "Amazon", price: 669, offer: "Coupon ₹30" },
-      { store: "Flipkart", price: 679, offer: "Free delivery" },
+      { store: "Official Brand", price: 699, offer: "Buy 1 Get 1 mini", url: "https://example.com/brand/niacinamide-serum" },
+      { store: "Nykaa", price: 649, offer: "12% OFF", best: true, url: "https://nykaa.com/niacinamide-serum" },
+      { store: "Amazon", price: 669, offer: "Coupon ₹30", url: "https://amazon.in/dp/B000NIAC" },
+      { store: "Flipkart", price: 679, offer: "Free delivery", url: "https://flipkart.com/niacinamide-serum" },
     ],
   },
   {
@@ -151,16 +154,17 @@ export const products: Product[] = [
     rating: 4.7,
     reviews: 3390,
     match: 98,
+    image: "https://images.unsplash.com/photo-1579566318995-19e4917aef92?q=80&w=600&auto=format&fit=crop",
     reason: "UV index is 8 today and you have active pigmentation — non-greasy high protection.",
     ingredients: ["Tinosorb S", "Uvinul A Plus", "Silica"],
     benefits: ["No white cast", "Matte finish", "Sweat resistant"],
     suitable: "Oily · All tones",
     usage: "Morning · 2 finger lengths · reapply every 3h",
     stores: [
-      { store: "Official Brand", price: 899, offer: "Free travel size", best: true },
-      { store: "Nykaa", price: 909, offer: "5% OFF" },
-      { store: "Amazon", price: 939, offer: "—" },
-      { store: "Flipkart", price: 929, offer: "Free delivery" },
+      { store: "Official Brand", price: 899, offer: "Free travel size", best: true, url: "https://example.com/brand/matte-spf" },
+      { store: "Nykaa", price: 909, offer: "5% OFF", url: "https://nykaa.com/matte-spf" },
+      { store: "Amazon", price: 939, offer: "—", url: "https://amazon.in/dp/B000SPF" },
+      { store: "Flipkart", price: 929, offer: "Free delivery", url: "https://flipkart.com/matte-spf" },
     ],
   },
   {
@@ -173,6 +177,7 @@ export const products: Product[] = [
     rating: 4.4,
     reviews: 1870,
     match: 94,
+    image: "https://images.unsplash.com/photo-1596462502278-27bfdc403348?q=80&w=600&auto=format&fit=crop",
     reason:
       "Shade matched to Medium depth with warm undertone; oil-control formula for your skin type.",
     ingredients: ["Silica", "Niacinamide", "Vitamin E"],
@@ -180,10 +185,10 @@ export const products: Product[] = [
     suitable: "Medium · Warm undertone · Oily",
     usage: "2 pumps · buff outward with damp sponge",
     stores: [
-      { store: "Official Brand", price: 1250, offer: "10% OFF" },
-      { store: "Nykaa", price: 1125, offer: "Flat ₹125 OFF", best: true },
-      { store: "Amazon", price: 1199, offer: "Coupon ₹50" },
-      { store: "Flipkart", price: 1180, offer: "Free delivery" },
+      { store: "Official Brand", price: 1250, offer: "10% OFF", url: "https://example.com/brand/blur-foundation" },
+      { store: "Nykaa", price: 1125, offer: "Flat ₹125 OFF", best: true, url: "https://nykaa.com/blur-foundation" },
+      { store: "Amazon", price: 1199, offer: "Coupon ₹50", url: "https://amazon.in/dp/B000BLUR" },
+      { store: "Flipkart", price: 1180, offer: "Free delivery", url: "https://flipkart.com/blur-foundation" },
     ],
   },
   {
@@ -196,16 +201,17 @@ export const products: Product[] = [
     rating: 4.3,
     reviews: 940,
     match: 89,
+    image: "https://images.unsplash.com/photo-1596462502298-2850d5d05b5b?q=80&w=600&auto=format&fit=crop",
     reason: "Warm terracotta flatters golden undertones on medium depth skin.",
     ingredients: ["Squalane", "Jojoba Ester", "Mica"],
     benefits: ["Natural flush", "Blendable", "Buildable"],
     suitable: "Medium · Warm undertone",
     usage: "Tap 2 dots on cheekbones · blend with fingers",
     stores: [
-      { store: "Official Brand", price: 640, offer: "—" },
-      { store: "Nykaa", price: 595, offer: "7% OFF", best: true },
-      { store: "Amazon", price: 610, offer: "—" },
-      { store: "Flipkart", price: 620, offer: "Free delivery" },
+      { store: "Official Brand", price: 640, offer: "—", url: "https://example.com/brand/cream-blush" },
+      { store: "Nykaa", price: 595, offer: "7% OFF", best: true, url: "https://nykaa.com/cream-blush" },
+      { store: "Amazon", price: 610, offer: "—", url: "https://amazon.in/dp/B000BLUSH" },
+      { store: "Flipkart", price: 620, offer: "Free delivery", url: "https://flipkart.com/cream-blush" },
     ],
   },
   {
@@ -218,18 +224,19 @@ export const products: Product[] = [
     rating: 4.5,
     reviews: 1420,
     match: 91,
+    image: "https://images.unsplash.com/photo-1586495777744-4413f21062fa?q=80&w=600&auto=format&fit=crop",
     reason: "Warm rose with brown depth reads harmonious against your undertone.",
     ingredients: ["Shea Butter", "Castor Oil", "Vitamin E"],
     benefits: ["Non-drying", "6h wear", "Satin finish"],
     suitable: "Warm undertone · All types",
     usage: "Apply from centre outward · blot once",
     stores: [
-      { store: "Official Brand", price: 780, offer: "10% OFF" },
-      { store: "Nykaa", price: 702, offer: "Flat ₹78 OFF", best: true },
-      { store: "Amazon", price: 749, offer: "—" },
-      { store: "Flipkart", price: 760, offer: "Free delivery" },
+      { store: "Official Brand", price: 780, offer: "10% OFF", url: "https://example.com/brand/satin-lip" },
+      { store: "Nykaa", price: 702, offer: "Flat ₹78 OFF", best: true, url: "https://nykaa.com/satin-lip" },
+      { store: "Amazon", price: 749, offer: "—", url: "https://amazon.in/dp/B000LIP" },
+      { store: "Flipkart", price: 760, offer: "Free delivery", url: "https://flipkart.com/satin-lip" },
     ],
-  },
+  }
 ];
 
 export const tutorials = [
@@ -238,10 +245,33 @@ export const tutorials = [
     duration: "4 min",
     kind: "Skincare",
     steps: [
-      "Wash face with Salicylic Gentle Face Wash — 30 seconds, lukewarm water.",
-      "Press 3 drops of Niacinamide Serum into damp skin, wait 60 seconds.",
-      "Apply pea-size Oil-Free Gel Moisturiser upward and outward.",
-      "Finish with 2 finger lengths of SPF 50 Matte Fluid, including ears and neck.",
+      {
+        id: "intro1",
+        description: "AI Consultation Intro",
+        narration: "Hello! Based on your AI skin analysis, I've created a skincare routine specially for you. I noticed your skin leans oily, so today I'll show you exactly how to apply your recommended products.",
+        durationSeconds: 15,
+      },
+      {
+        id: "step1",
+        description: "Wash face with Salicylic Gentle Face Wash — 30 seconds, lukewarm water.",
+        narration: "Start by washing your face with the recommended Dermaline cleanser. Use a gentle circular motion for thirty to sixty seconds.",
+        durationSeconds: 12,
+        product: products.find(p => p.id === "cleanser")
+      },
+      {
+        id: "step2",
+        description: "Press 3 drops of Niacinamide Serum into damp skin, wait 60 seconds.",
+        narration: "Next, apply two to three drops of the Solvea Niacinamide serum evenly across your face.",
+        durationSeconds: 15,
+        product: products.find(p => p.id === "serum")
+      },
+      {
+        id: "step3",
+        description: "Finish with 2 finger lengths of SPF 50 Matte Fluid, including ears and neck.",
+        narration: "Finish your morning routine with Aurea sunscreen. Apply using the two-finger rule evenly on your face and neck.",
+        durationSeconds: 14,
+        product: products.find(p => p.id === "spf")
+      },
     ],
   },
   {
@@ -249,22 +279,27 @@ export const tutorials = [
     duration: "7 min",
     kind: "Makeup",
     steps: [
-      "Primer: pea size on T-zone only to grip foundation.",
-      "Foundation 320 Warm Sand: 2 pumps, buff with damp sponge.",
-      "Concealer: 3 dots under eyes in triangle, tap to blend.",
-      "Cream blush Terracotta Warmth on cheekbones, blend upward.",
-      "Neutral bronze eyeshadow through crease, mascara on upper lashes.",
-      "Spiced Rose lipstick, then setting spray in an X and T motion.",
-    ],
-  },
-  {
-    title: "Night barrier repair",
-    duration: "5 min",
-    kind: "Skincare",
-    steps: [
-      "Double cleanse: micellar first, then face wash.",
-      "BHA exfoliant on Tuesday and Friday only — wait 5 minutes.",
-      "Seal with Ceramide Barrier Cream on slightly damp skin.",
+      {
+        id: "m_step1",
+        description: "Foundation 320 Warm Sand: 2 pumps, buff with damp sponge.",
+        narration: "For your base, apply two pumps of Muse Studio foundation. Buff outward with a damp sponge for a flawless blur.",
+        durationSeconds: 18,
+        product: products.find(p => p.id === "foundation")
+      },
+      {
+        id: "m_step2",
+        description: "Cream blush Terracotta Warmth on cheekbones, blend upward.",
+        narration: "Tap two dots of the Terracotta blush on your cheekbones and blend upward for a natural warm flush.",
+        durationSeconds: 12,
+        product: products.find(p => p.id === "blush")
+      },
+      {
+        id: "m_step3",
+        description: "Spiced Rose lipstick, then setting spray in an X and T motion.",
+        narration: "Complete the look with Spiced Rose satin lip colour. Apply from the centre outward and blot once.",
+        durationSeconds: 15,
+        product: products.find(p => p.id === "lipstick")
+      }
     ],
   },
 ];

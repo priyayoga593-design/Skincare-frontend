@@ -7,13 +7,13 @@ import { routines, habits, foodGuidance } from "@/lib/mock-data";
 export const Route = createFileRoute("/routine")({
   head: () => ({
     meta: [
-      { title: "Personalised Skincare Routine — Lumea" },
+      { title: "Personalised Skincare Routine — 360° Skincare" },
       {
         name: "description",
         content:
           "Your AI-built morning, night and weekly routine with exact products, quantities, waiting times and diet plus lifestyle targets.",
       },
-      { property: "og:title", content: "Personalised Skincare Routine — Lumea" },
+      { property: "og:title", content: "Personalised Skincare Routine — 360° Skincare" },
       {
         property: "og:description",
         content:
@@ -34,7 +34,7 @@ function RoutinePage() {
   return (
     <AppShell>
       <PageHeader
-        eyebrow="Module 6 · Recommendation engine"
+        eyebrow="Recommendation engine"
         title="Your plan for this week"
         description="Built from your face scan, food log, sleep, stress, weather and UV index. It updates automatically after every scan."
       />

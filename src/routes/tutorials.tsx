@@ -1,24 +1,22 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
-import { Play, Clock, Sparkles } from "lucide-react";
+import { Clock, Sparkles, TrendingUp, Calendar, Heart, Share2, Save } from "lucide-react";
 import { AppShell, PageHeader } from "@/components/app-shell";
 import { Badge } from "@/components/ui/badge";
-import { tutorials, safetyTips } from "@/lib/mock-data";
+import { Button } from "@/components/ui/button";
+import { tutorials, safetyTips, skinAnalysis } from "@/lib/mock-data";
+import { AIVideoPlayer } from "@/components/AIVideoPlayer";
+import { motion, AnimatePresence } from "framer-motion";
+import { toast } from "sonner";
 
 export const Route = createFileRoute("/tutorials")({
   head: () => ({
     meta: [
-      { title: "AI Demo & Application Tutorials — Lumea" },
+      { title: "AI Personalized Tutorial — 360° Skincare" },
       {
         name: "description",
         content:
-          "Step-by-step AI tutorials for your exact recommended products: quantity, placement, order, waiting time and makeup application walkthroughs.",
-      },
-      { property: "og:title", content: "AI Demo & Application Tutorials — Lumea" },
-      {
-        property: "og:description",
-        content:
-          "Guided skincare and makeup tutorials built around the products the AI picked for you.",
+          "Personalized step-by-step video tutorials based on your AI skin analysis and recommended products.",
       },
     ],
   }),
@@ -29,81 +27,107 @@ function TutorialsPage() {
   const [active, setActive] = useState(0);
   const current = tutorials[active];
 
+  const handleSave = () => {
+    toast.success("Tutorial saved to your history.");
+  };
+
   return (
     <AppShell>
-      <PageHeader
-        eyebrow="Module 9 · AI demo & tutorial"
-        title="How to actually use them"
-        description="Every routine becomes a guided demo using your own recommended products — correct quantity, direction and timing."
-      />
+      <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}>
+        <PageHeader
+          eyebrow="AI Personalized Video"
+          title="Your Guided Routine"
+          description="A fully customized video tutorial showing exactly how to apply your recommended products."
+        />
+      </motion.div>
 
-      <div className="grid gap-6 lg:grid-cols-[20rem_1fr]">
-        <div className="space-y-3">
-          {tutorials.map((t, i) => (
-            <button
-              key={t.title}
-              onClick={() => setActive(i)}
-              className={`surface w-full p-5 text-left transition-colors ${
-                i === active ? "bg-accent/60" : "hover:bg-muted"
-              }`}
-            >
-              <div className="flex items-center justify-between">
-                <Badge variant="secondary">{t.kind}</Badge>
-                <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                  <Clock className="size-3.5" /> {t.duration}
-                </span>
+      <div className="grid gap-6 lg:grid-cols-[1fr_22rem] mt-6">
+        {/* Main Player Section */}
+        <div className="space-y-6">
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.98 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 0.5, delay: 0.1 }}
+            className="rounded-3xl overflow-hidden ring-1 ring-border/50 shadow-2xl bg-card"
+          >
+            {/* The AIVideoPlayer */}
+            {/* @ts-ignore - The types match but TS sometimes complains about dynamic imports in this setup */}
+            <AIVideoPlayer tutorial={current} />
+            
+            <div className="p-6 bg-card border-t border-border/50 flex flex-wrap gap-4 items-center justify-between">
+              <div>
+                <h2 className="text-2xl font-display font-medium tracking-tight">{current.title}</h2>
+                <p className="text-muted-foreground text-sm mt-1 flex items-center gap-2">
+                  <Clock className="size-4" /> {current.duration} · AI Generated for {skinAnalysis.attributes.find(a => a.label === "Skin Type")?.value} Skin
+                </p>
               </div>
-              <p className="mt-2.5 font-display text-lg">{t.title}</p>
-              <p className="text-xs text-muted-foreground">{t.steps.length} steps</p>
-            </button>
-          ))}
+              <div className="flex gap-2">
+                <Button variant="outline" size="icon" className="rounded-full hover:bg-primary/10 hover:text-primary transition-colors">
+                  <Heart className="size-5" />
+                </Button>
+                <Button variant="outline" size="icon" className="rounded-full hover:bg-primary/10 hover:text-primary transition-colors" onClick={handleSave}>
+                  <Save className="size-5" />
+                </Button>
+                <Button variant="outline" size="icon" className="rounded-full hover:bg-primary/10 hover:text-primary transition-colors">
+                  <Share2 className="size-5" />
+                </Button>
+              </div>
+            </div>
+          </motion.div>
+
+
+
         </div>
 
-        <div className="surface glow-veil p-6 sm:p-8">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <h2 className="text-2xl">{current.title}</h2>
-            <button className="flex items-center gap-2 rounded-full bg-primary px-4 py-2 text-sm text-primary-foreground transition-opacity hover:opacity-90">
-              <Play className="size-3.5" /> Play with AI avatar
-            </button>
-          </div>
-          <p className="mt-2 text-sm text-muted-foreground">
-            The 3D beauty assistant mirrors each step on a face matched to your tone and undertone.
-          </p>
-
-          <ol className="mt-7 space-y-5">
-            {current.steps.map((s, i) => (
-              <li key={s} className="flex gap-4">
-                <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-card font-display text-sm shadow-[var(--shadow-soft)]">
-                  {i + 1}
-                </span>
-                <p className="pt-1.5 text-sm">{s}</p>
-              </li>
+        {/* Sidebar */}
+        <div className="space-y-6">
+          <div className="surface p-2 space-y-2">
+            <h3 className="text-sm font-semibold p-3 pb-1">Your Video Library</h3>
+            {tutorials.map((t, i) => (
+              <button
+                key={t.title}
+                onClick={() => setActive(i)}
+                className={`w-full p-4 rounded-xl text-left transition-all duration-300 relative overflow-hidden ${
+                  i === active 
+                    ? "bg-primary/10 text-primary border border-primary/20 shadow-sm" 
+                    : "hover:bg-muted border border-transparent"
+                }`}
+              >
+                {i === active && (
+                  <motion.div 
+                    layoutId="active-indicator"
+                    className="absolute left-0 top-0 bottom-0 w-1 bg-primary"
+                  />
+                )}
+                <div className="flex items-center justify-between">
+                  <Badge variant={i === active ? "default" : "secondary"} className={i === active ? "" : "opacity-70"}>{t.kind}</Badge>
+                  <span className="flex items-center gap-1 text-xs opacity-70">
+                    <Clock className="size-3.5" /> {t.duration}
+                  </span>
+                </div>
+                <p className={`mt-2.5 font-display text-base font-medium ${i === active ? "text-primary" : "text-foreground"}`}>{t.title}</p>
+                <p className="text-xs opacity-70 mt-1">{t.steps.length} steps</p>
+              </button>
             ))}
-          </ol>
+          </div>
 
-          <div className="mt-8 grid gap-4 sm:grid-cols-2">
-            <div className="rounded-xl bg-muted p-4">
-              <p className="eyebrow">Before &amp; after simulation</p>
-              <p className="mt-1.5 text-sm text-muted-foreground">
-                Following this routine consistently projects a{" "}
-                <span className="text-foreground">+11 skin health score</span> in 8 weeks, with acne
-                density down roughly 30%.
-              </p>
-            </div>
-            <div className="rounded-xl bg-clay/20 p-4">
-              <p className="eyebrow">Safety first</p>
-              <ul className="mt-1.5 space-y-1 text-sm">
-                {safetyTips.slice(0, 3).map((t) => (
-                  <li key={t} className="flex gap-2">
-                    <Sparkles className="mt-0.5 size-3.5 shrink-0" />
-                    {t}
-                  </li>
-                ))}
-              </ul>
-            </div>
+          <div className="surface p-5 bg-clay/5 border-clay/20">
+            <h3 className="text-sm font-semibold flex items-center gap-2 mb-3">
+              <Sparkles className="size-4 text-clay" />
+              AI Safety Tips
+            </h3>
+            <ul className="space-y-2 text-sm text-muted-foreground">
+              {safetyTips.slice(0, 3).map((tip) => (
+                <li key={tip} className="flex gap-2 leading-relaxed">
+                  <span className="w-1.5 h-1.5 rounded-full bg-clay mt-1.5 shrink-0" />
+                  {tip}
+                </li>
+              ))}
+            </ul>
           </div>
         </div>
       </div>
     </AppShell>
   );
 }
+

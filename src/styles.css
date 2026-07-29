@@ -5,9 +5,14 @@
 @custom-variant dark (&:is(.dark *));
 
 /*
- * Design system — "Soft clinical clean"
- * Warm off-white canvas, deep forest text, sage + clay accents.
- * All colors in oklch. Never hardcode colors in components.
+ * Design system — "Warm Blush Editorial"
+ * Palette:
+ *   Background  : #FFF0D1  (warm cream)
+ *   Primary     : #795757  (mauve-brown — navbar, primary buttons)
+ *   Foreground  : #3B3030  (espresso — headings, body text)
+ *   Accent      : #F7B5CA  (blush pink — hover, icons, badges, active)
+ *
+ * All colors are expressed in oklch. Never hardcode hex in components.
  */
 
 @theme inline {
@@ -56,69 +61,77 @@
   --color-chart-4: var(--chart-4);
   --color-chart-5: var(--chart-5);
 
-  --shadow-soft: 0 1px 2px oklch(0.3 0.03 140 / 0.04), 0 8px 24px oklch(0.3 0.03 140 / 0.06);
-  --shadow-lift: 0 2px 6px oklch(0.3 0.03 140 / 0.06), 0 18px 40px oklch(0.3 0.03 140 / 0.1);
+  /* Shadows using the primary palette tones */
+  --shadow-soft: 0 1px 2px oklch(0.28 0.04 15 / 0.04), 0 8px 24px oklch(0.28 0.04 15 / 0.07);
+  --shadow-lift: 0 2px 6px oklch(0.28 0.04 15 / 0.07), 0 18px 40px oklch(0.28 0.04 15 / 0.12);
 }
 
 :root {
   --radius: 1rem;
-  --background: oklch(0.978 0.008 85);
-  --foreground: oklch(0.27 0.031 155);
-  --card: oklch(0.995 0.004 90);
-  --card-foreground: oklch(0.27 0.031 155);
-  --popover: oklch(0.995 0.004 90);
-  --popover-foreground: oklch(0.27 0.031 155);
-  --primary: oklch(0.33 0.045 155);
-  --primary-foreground: oklch(0.98 0.008 85);
-  --secondary: oklch(0.945 0.014 90);
-  --secondary-foreground: oklch(0.33 0.045 155);
-  --muted: oklch(0.948 0.011 95);
-  --muted-foreground: oklch(0.53 0.022 150);
-  --accent: oklch(0.9 0.036 145);
-  --accent-foreground: oklch(0.3 0.04 155);
-  --sage: oklch(0.72 0.055 145);
-  --sage-foreground: oklch(0.25 0.03 155);
-  --clay: oklch(0.78 0.078 42);
-  --clay-foreground: oklch(0.29 0.05 40);
-  --success: oklch(0.66 0.11 150);
+
+  /* Background: #FFF0D1 ≈ oklch(0.956 0.043 85) */
+  --background:        oklch(0.956 0.043 85);
+
+  /* Foreground / body text: #3B3030 ≈ oklch(0.282 0.028 15) */
+  --foreground:        oklch(0.282 0.028 15);
+
+  /* Cards: a slightly lighter cream so they lift off the background */
+  --card:              oklch(0.978 0.028 85);
+  --card-foreground:   oklch(0.282 0.028 15);
+
+  /* Popover: same as card */
+  --popover:           oklch(0.978 0.028 85);
+  --popover-foreground: oklch(0.282 0.028 15);
+
+  /* Primary: #795757 ≈ oklch(0.452 0.062 18) — navbar, primary buttons */
+  --primary:           oklch(0.452 0.062 18);
+  --primary-foreground: oklch(0.97 0.015 85);
+
+  /* Secondary: a warm blush-tinted mid-tone for subtle fills */
+  --secondary:         oklch(0.92 0.025 30);
+  --secondary-foreground: oklch(0.282 0.028 15);
+
+  /* Muted: softened cream for backgrounds/disabled states */
+  --muted:             oklch(0.938 0.030 80);
+  --muted-foreground:  oklch(0.52 0.030 20);
+
+  /* Accent: #F7B5CA ≈ oklch(0.82 0.09 355) — hover, icons, badges, active */
+  --accent:            oklch(0.82 0.09 355);
+  --accent-foreground: oklch(0.282 0.028 15);
+
+  /* Clay: repurposed to blush-adjacent warm tone for decorative use */
+  --clay:              oklch(0.76 0.10 355);
+  --clay-foreground:   oklch(0.282 0.028 15);
+
+  /* Sage: warm taupe/rose for secondary decorative elements */
+  --sage:              oklch(0.68 0.058 18);
+  --sage-foreground:   oklch(0.97 0.015 85);
+
+  /* Semantic colours */
+  --success:           oklch(0.62 0.10 145);
   --success-foreground: oklch(0.99 0.005 90);
-  --warning: oklch(0.8 0.11 75);
-  --warning-foreground: oklch(0.3 0.05 60);
-  --destructive: oklch(0.6 0.16 25);
+  --warning:           oklch(0.78 0.11 75);
+  --warning-foreground: oklch(0.30 0.05 60);
+  --destructive:       oklch(0.58 0.16 20);
   --destructive-foreground: oklch(0.99 0.005 90);
-  --border: oklch(0.9 0.012 95);
-  --input: oklch(0.9 0.012 95);
-  --ring: oklch(0.72 0.055 145);
-  --chart-1: oklch(0.62 0.08 150);
-  --chart-2: oklch(0.75 0.09 45);
-  --chart-3: oklch(0.68 0.06 210);
-  --chart-4: oklch(0.8 0.1 80);
-  --chart-5: oklch(0.55 0.06 320);
+
+  /* Borders and inputs: warm cream-brown */
+  --border:            oklch(0.88 0.030 50);
+  --input:             oklch(0.88 0.030 50);
+
+  /* Focus ring: accent blush */
+  --ring:              oklch(0.76 0.10 355);
+
+  /* Charts */
+  --chart-1:           oklch(0.452 0.062 18);
+  --chart-2:           oklch(0.82 0.09 355);
+  --chart-3:           oklch(0.68 0.058 18);
+  --chart-4:           oklch(0.78 0.08 55);
+  --chart-5:           oklch(0.62 0.06 340);
 }
 
-.dark {
-  --background: oklch(0.19 0.018 155);
-  --foreground: oklch(0.95 0.008 90);
-  --card: oklch(0.24 0.02 155);
-  --card-foreground: oklch(0.95 0.008 90);
-  --popover: oklch(0.24 0.02 155);
-  --popover-foreground: oklch(0.95 0.008 90);
-  --primary: oklch(0.85 0.05 145);
-  --primary-foreground: oklch(0.22 0.025 155);
-  --secondary: oklch(0.28 0.02 155);
-  --secondary-foreground: oklch(0.95 0.008 90);
-  --muted: oklch(0.28 0.02 155);
-  --muted-foreground: oklch(0.72 0.02 140);
-  --accent: oklch(0.33 0.035 150);
-  --accent-foreground: oklch(0.95 0.008 90);
-  --sage: oklch(0.66 0.06 145);
-  --sage-foreground: oklch(0.15 0.02 155);
-  --clay: oklch(0.72 0.08 42);
-  --clay-foreground: oklch(0.18 0.03 40);
-  --border: oklch(1 0 0 / 12%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.66 0.06 145);
-}
+/* ── No dark mode needed (palette is light-only) ─────────────────────────── */
+/* If you ever add dark mode, add a `.dark { … }` block here.               */
 
 @layer base {
   * {
@@ -139,9 +152,11 @@
     font-family: var(--font-display);
     font-weight: 500;
     letter-spacing: -0.015em;
+    color: var(--color-foreground);
   }
 }
 
+/* ── Utility: surface card ───────────────────────────────────────────────── */
 @utility surface {
   background-color: var(--color-card);
   border: 1px solid var(--color-border);
@@ -149,15 +164,143 @@
   box-shadow: var(--shadow-soft);
 }
 
+/* ── Utility: hero/page decorative gradient veil ────────────────────────── */
 @utility glow-veil {
   background-image:
-    radial-gradient(120% 90% at 12% 0%, oklch(from var(--sage) l c h / 0.28) 0%, transparent 55%),
-    radial-gradient(90% 80% at 95% 10%, oklch(from var(--clay) l c h / 0.24) 0%, transparent 60%);
+    radial-gradient(120% 90% at 12% 0%, oklch(from var(--accent) l c h / 0.30) 0%, transparent 55%),
+    radial-gradient(90% 80% at 95% 10%,  oklch(from var(--primary) l c h / 0.18) 0%, transparent 60%);
 }
 
+/* ── Utility: eyebrow label ─────────────────────────────────────────────── */
 @utility eyebrow {
   font-size: 0.6875rem;
   letter-spacing: 0.18em;
   text-transform: uppercase;
-  color: var(--color-muted-foreground);
+  color: var(--color-primary);
+  font-weight: 600;
+}
+
+/* ── Utility: tiny text ─────────────────────────────────────────────────── */
+@utility text-2xs {
+  font-size: 0.65rem;
+  line-height: 1rem;
+}
+
+/* ── Utility: shadow-lift ───────────────────────────────────────────────── */
+@utility shadow-lift {
+  box-shadow:
+    0 4px 6px -1px oklch(0.28 0.04 15 / 0.08),
+    0 2px 4px -2px oklch(0.28 0.04 15 / 0.06);
+}
+
+/* ── Navbar & header surface override ───────────────────────────────────── */
+.navbar-surface {
+  background-color: var(--color-primary);
+  border-bottom: 1px solid oklch(from var(--primary) calc(l - 0.06) c h);
+}
+
+.navbar-surface .nav-link {
+  color: oklch(from var(--primary-foreground) l c h / 0.75);
+  transition: color 0.2s, background-color 0.2s;
+}
+
+.navbar-surface .nav-link:hover {
+  color: var(--color-primary-foreground);
+  background-color: oklch(from var(--primary) calc(l + 0.08) c h / 0.35);
+}
+
+.navbar-surface .nav-link-active {
+  color: var(--color-primary-foreground);
+  background-color: var(--color-accent);
+  color: var(--color-accent-foreground);
+}
+
+/* ── Animations ─────────────────────────────────────────────────────────── */
+@keyframes scan-line {
+  0%   { top: 0%;   opacity: 1; }
+  90%  { top: 100%; opacity: 1; }
+  100% { top: 100%; opacity: 0; }
+}
+
+.animate-scan-line {
+  animation: scan-line 3.8s linear infinite;
+  position: absolute;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fadeIn {
+  animation: fadeIn 0.18s ease-out both;
+}
+
+@keyframes float {
+  0%   { transform: translateY(0px)   scale(1); }
+  50%  { transform: translateY(-15px) scale(1.02); }
+  100% { transform: translateY(0px)   scale(1); }
+}
+
+.animate-float {
+  animation: float 6s ease-in-out infinite;
+}
+
+.animate-float-slow {
+  animation: float 8s ease-in-out infinite alternate;
+}
+
+/* ── Glassmorphism utility ───────────────────────────────────────────────── */
+.bg-blur-premium {
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  background-color: oklch(from var(--background) l c h / 0.72);
+}
+
+/* ── Accent-tinted icon helper ───────────────────────────────────────────── */
+.icon-accent {
+  color: var(--color-accent);
+}
+
+/* ── Accent pill / badge override ───────────────────────────────────────── */
+.badge-accent {
+  background-color: var(--color-accent);
+  color: var(--color-accent-foreground);
+  border-color: transparent;
+}
+
+/* ── Progress bar fill ───────────────────────────────────────────────────── */
+.progress-fill {
+  background: linear-gradient(
+    90deg,
+    var(--color-primary) 0%,
+    var(--color-accent)  100%
+  );
+}
+
+/* ── Gradient text helper ────────────────────────────────────────────────── */
+.gradient-text {
+  background: linear-gradient(
+    135deg,
+    var(--color-primary) 0%,
+    oklch(0.60 0.09 355) 100%
+  );
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* ── Hover lift card ─────────────────────────────────────────────────────── */
+.card-hover {
+  transition: transform 0.25s ease, box-shadow 0.25s ease;
+}
+.card-hover:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--shadow-lift);
+}
+
+/* ── Focus ring accent override ─────────────────────────────────────────── */
+*:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
 }

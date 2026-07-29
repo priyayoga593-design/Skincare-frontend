@@ -13,6 +13,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as AssistantRouteImport } from './routes/assistant'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as HealthRouteImport } from './routes/health'
+import { Route as NutritionRouteImport } from './routes/nutrition'
 import { Route as ProductsRouteImport } from './routes/products'
 import { Route as ProfileRouteImport } from './routes/profile'
 import { Route as ProgressRouteImport } from './routes/progress'
@@ -40,6 +41,11 @@ const AuthRoute = AuthRouteImport.update({
 const HealthRoute = HealthRouteImport.update({
   id: '/health',
   path: '/health',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const NutritionRoute = NutritionRouteImport.update({
+  id: '/nutrition',
+  path: '/nutrition',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ProductsRoute = ProductsRouteImport.update({
@@ -88,6 +94,7 @@ export interface FileRoutesByFullPath {
   '/assistant': typeof AssistantRoute
   '/auth': typeof AuthRoute
   '/health': typeof HealthRoute
+  '/nutrition': typeof NutritionRoute
   '/products': typeof ProductsRoute
   '/profile': typeof ProfileRoute
   '/progress': typeof ProgressRoute
@@ -102,6 +109,7 @@ export interface FileRoutesByTo {
   '/assistant': typeof AssistantRoute
   '/auth': typeof AuthRoute
   '/health': typeof HealthRoute
+  '/nutrition': typeof NutritionRoute
   '/products': typeof ProductsRoute
   '/profile': typeof ProfileRoute
   '/progress': typeof ProgressRoute
@@ -117,6 +125,7 @@ export interface FileRoutesById {
   '/assistant': typeof AssistantRoute
   '/auth': typeof AuthRoute
   '/health': typeof HealthRoute
+  '/nutrition': typeof NutritionRoute
   '/products': typeof ProductsRoute
   '/profile': typeof ProfileRoute
   '/progress': typeof ProgressRoute
@@ -133,6 +142,7 @@ export interface FileRouteTypes {
     | '/assistant'
     | '/auth'
     | '/health'
+    | '/nutrition'
     | '/products'
     | '/profile'
     | '/progress'
@@ -147,6 +157,7 @@ export interface FileRouteTypes {
     | '/assistant'
     | '/auth'
     | '/health'
+    | '/nutrition'
     | '/products'
     | '/profile'
     | '/progress'
@@ -161,6 +172,7 @@ export interface FileRouteTypes {
     | '/assistant'
     | '/auth'
     | '/health'
+    | '/nutrition'
     | '/products'
     | '/profile'
     | '/progress'
@@ -176,6 +188,7 @@ export interface RootRouteChildren {
   AssistantRoute: typeof AssistantRoute
   AuthRoute: typeof AuthRoute
   HealthRoute: typeof HealthRoute
+  NutritionRoute: typeof NutritionRoute
   ProductsRoute: typeof ProductsRoute
   ProfileRoute: typeof ProfileRoute
   ProgressRoute: typeof ProgressRoute
@@ -214,6 +227,13 @@ declare module '@tanstack/react-router' {
       path: '/health'
       fullPath: '/health'
       preLoaderRoute: typeof HealthRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/nutrition': {
+      id: '/nutrition'
+      path: '/nutrition'
+      fullPath: '/nutrition'
+      preLoaderRoute: typeof NutritionRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/products': {
@@ -280,6 +300,7 @@ const rootRouteChildren: RootRouteChildren = {
   AssistantRoute: AssistantRoute,
   AuthRoute: AuthRoute,
   HealthRoute: HealthRoute,
+  NutritionRoute: NutritionRoute,
   ProductsRoute: ProductsRoute,
   ProfileRoute: ProfileRoute,
   ProgressRoute: ProgressRoute,

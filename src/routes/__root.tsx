@@ -14,6 +14,7 @@ import { Sparkles } from "lucide-react";
 import { AuthProvider, useAuth } from "@/lib/auth-context";
 import { HealthProvider } from "@/lib/health-context";
 import { ScanProvider } from "@/lib/scan-context";
+import { NutritionProvider } from "@/lib/nutrition-context";
 
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
@@ -171,10 +172,12 @@ function RootComponent() {
         <RootGuard>
           <HealthProvider>
             <ScanProvider>
-              <ReminderProvider>
-                {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
-                <Outlet />
-              </ReminderProvider>
+              <NutritionProvider>
+                <ReminderProvider>
+                  {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
+                  <Outlet />
+                </ReminderProvider>
+              </NutritionProvider>
             </ScanProvider>
           </HealthProvider>
         </RootGuard>

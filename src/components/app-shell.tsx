@@ -15,6 +15,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 const nav = [
   { to: "/", label: "Today" },
   { to: "/health", label: "Health" },
+  { to: "/nutrition", label: "Nutrition" },
   { to: "/scan", label: "Face Scan" },
   { to: "/routine", label: "Routine" },
   { to: "/products", label: "Products" },

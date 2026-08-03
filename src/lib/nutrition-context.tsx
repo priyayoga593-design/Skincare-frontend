@@ -74,10 +74,14 @@ export function NutritionProvider({ children }: { children: ReactNode }) {
     const q = query(logsRef, orderBy("date", "desc")); // Fetch recent logs
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      const loadedLogs = snapshot.docs.map((doc) => ({
-        date: doc.id,
-        ...doc.data(),
-      })) as DailyNutritionLog[];
+      const loadedLogs = snapshot.docs.map((docSnap) => {
+        const data = docSnap.data() || {};
+        return {
+          date: docSnap.id,
+          foods: Array.isArray(data.foods) ? data.foods : [],
+          waterIntake: typeof data.waterIntake === "number" ? data.waterIntake : 0,
+        };
+      }) as DailyNutritionLog[];
 
       // Ensure today exists
       if (!loadedLogs.find(l => l.date === todayStr)) {
@@ -90,7 +94,12 @@ export function NutritionProvider({ children }: { children: ReactNode }) {
     return () => unsubscribe();
   }, [user?.uid, todayStr]);
 
-  const todayLog = dailyLogs.find(l => l.date === todayStr) || defaultToday;
+  const rawToday = dailyLogs.find(l => l.date === todayStr) || defaultToday;
+  const todayLog: DailyNutritionLog = {
+    date: rawToday.date || todayStr,
+    foods: Array.isArray(rawToday.foods) ? rawToday.foods : [],
+    waterIntake: typeof rawToday.waterIntake === "number" ? rawToday.waterIntake : 0,
+  };
 
   const addFood = async (foodData: Omit<FoodItem, "id" | "isSkinUnfriendly">) => {
     // Call the backend API

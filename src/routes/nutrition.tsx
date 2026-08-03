@@ -159,27 +159,30 @@ function NutritionPage() {
   };
 
   // Calculations for Summary
-  const totalCalories = todayLog.foods.reduce((acc, f) => acc + (f.calories || 0), 0);
-  const totalProtein = todayLog.foods.reduce((acc, f) => acc + (f.protein || 0), 0);
-  const totalCarbs = todayLog.foods.reduce((acc, f) => acc + (f.carbs || 0), 0);
-  const totalFat = todayLog.foods.reduce((acc, f) => acc + (f.fat || 0), 0);
+  const foodsList = Array.isArray(todayLog?.foods) ? todayLog.foods : [];
+
+  const totalCalories = foodsList.reduce((acc, f) => acc + (f?.calories || 0), 0);
+  const totalProtein = foodsList.reduce((acc, f) => acc + (f?.protein || 0), 0);
+  const totalCarbs = foodsList.reduce((acc, f) => acc + (f?.carbs || 0), 0);
+  const totalFat = foodsList.reduce((acc, f) => acc + (f?.fat || 0), 0);
   
-  const totalFoods = todayLog.foods.length;
-  const unfriendlyFoodsCount = todayLog.foods.filter(f => f.isSkinUnfriendly).length;
+  const totalFoods = foodsList.length;
+  const unfriendlyFoodsCount = foodsList.filter(f => f?.isSkinUnfriendly).length;
   const friendlyFoodsCount = totalFoods - unfriendlyFoodsCount;
   
   const skinFriendlyScore = totalFoods === 0 ? 100 : Math.round((friendlyFoodsCount / totalFoods) * 100);
 
   // Mock Graph Data for Reports
-  const weeklyData = dailyLogs.slice(-7).map((log, index) => {
+  const weeklyData = (Array.isArray(dailyLogs) ? dailyLogs : []).slice(-7).map((log, index) => {
     const days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-    const totalLogFoods = log.foods.length || 1;
-    const healthyCount = log.foods.filter(f => !f.isSkinUnfriendly).length;
+    const logFoods = Array.isArray(log?.foods) ? log.foods : [];
+    const totalLogFoods = logFoods.length || 1;
+    const healthyCount = logFoods.filter(f => !f?.isSkinUnfriendly).length;
     return {
       day: days[index % 7],
       healthy: Math.round((healthyCount / totalLogFoods) * 100) || (80 + Math.random() * 20),
-      sugar: log.foods.reduce((acc, f) => acc + (f.sugar || 0), 0) || (10 + Math.random() * 30),
-      calories: log.foods.reduce((acc, f) => acc + (f.calories || 0), 0) || 1800 + Math.random() * 500,
+      sugar: logFoods.reduce((acc, f) => acc + (f?.sugar || 0), 0) || (10 + Math.random() * 30),
+      calories: logFoods.reduce((acc, f) => acc + (f?.calories || 0), 0) || 1800 + Math.random() * 500,
     };
   });
 
@@ -352,7 +355,7 @@ function NutritionPage() {
 
             <div className="flex-1 overflow-y-auto space-y-6 pr-2 custom-scrollbar">
               {["breakfast", "lunch", "dinner", "snack"].map((meal) => {
-                const mealFoods = todayLog.foods.filter(f => f.mealType === meal);
+                const mealFoods = foodsList.filter(f => f?.mealType === meal);
                 if (mealFoods.length === 0) return null;
                 
                 return (
@@ -404,7 +407,7 @@ function NutritionPage() {
             <div className="shrink-0 pt-4 border-t border-border/60">
               <div className="flex items-center justify-between mb-3">
                 <p className="text-xs font-semibold flex items-center gap-1.5"><Droplets className="size-3.5 text-accent-foreground" /> Quick Water</p>
-                <p className="text-xs text-muted-foreground">{todayLog.waterIntake} ml logged</p>
+                <p className="text-xs text-muted-foreground">{(todayLog?.waterIntake || 0)} ml logged</p>
               </div>
               <div className="grid grid-cols-3 gap-2">
                 <Button variant="outline" size="sm" onClick={() => { updateWaterIntake(250); toast.success("+250ml Water added"); }} className="text-xs h-9">
@@ -449,7 +452,7 @@ function NutritionPage() {
               </div>
               <div className="relative z-10">
                 <p className="eyebrow text-primary">Hydration Goal (3L)</p>
-                <p className="mt-1 font-display text-2xl">{todayLog.waterIntake} ml</p>
+                <p className="mt-1 font-display text-2xl">{(todayLog?.waterIntake || 0)} ml</p>
                 <Progress value={Math.min(100, (todayLog.waterIntake / 3000) * 100)} className="h-1.5 w-full mt-3 bg-primary/20" />
               </div>
             </div>

@@ -18,6 +18,7 @@ import { useProgress } from "@/lib/progress-context";
 import { useAuth } from "@/lib/auth-context";
 import { motion, AnimatePresence } from "framer-motion";
 import { Loader2, Calendar } from "lucide-react";
+import { API_BASE_URL } from "@/lib/config";
 
 export const Route = createFileRoute("/progress")({
   head: () => ({
@@ -76,9 +77,7 @@ function ProgressPage() {
     setIsComparing(true);
     setAiComparison(null);
     try {
-      const apiUrl = window.location.hostname === "localhost" 
-        ? `http://localhost:5000/api/scans/${user.uid}/compare` 
-        : `http://${window.location.hostname}:5000/api/scans/${user.uid}/compare`;
+      const apiUrl = `${API_BASE_URL}/scans/${user.uid}/compare`;
         
       const response = await fetch(apiUrl, {
         method: 'POST',

@@ -39,7 +39,7 @@ export async function getApiBaseUrl(): Promise<string> {
   }
 
   // 3. Default fallback
-  const fallbackUrl = "http://localhost:5000";
+  const fallbackUrl = "https://skincare-backend-9xia.onrender.com";
   cachedApiBaseUrl = fallbackUrl;
   return fallbackUrl;
 }

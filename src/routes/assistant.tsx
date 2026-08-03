@@ -9,6 +9,7 @@ import { useScan } from "@/lib/scan-context";
 import { assistantQuestions, profile as fallbackProfile } from "@/lib/mock-data";
 import { db } from "@/firebase/firebase";
 import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp } from "firebase/firestore";
+import { API_BASE_URL } from "@/lib/config";
 
 export const Route = createFileRoute("/assistant")({
   head: () => ({
@@ -94,10 +95,8 @@ function AssistantPage() {
         }
       }
 
-      // 2. Call the backend API (use current hostname to support mobile testing on local network)
-      const apiUrl = window.location.hostname === "localhost" 
-        ? "http://localhost:5000/api/chat" 
-        : `http://${window.location.hostname}:5000/api/chat`;
+      // 2. Call the backend API
+      const apiUrl = `${API_BASE_URL}/chat`;
 
       // Safely extract scan context to prevent JSON stringify errors on Firestore Timestamps or circular references
       const safeContext = currentScan ? {

@@ -1,5 +1,2 @@
 export const API_BASE_URL = 
-  import.meta.env.VITE_API_URL || 
-  (typeof window !== "undefined" && window.location.origin 
-    ? `${window.location.origin}/api` 
-    : "http://localhost:5000/api");
+  import.meta.env.VITE_API_URL || "https://skincare-backend-9xia.onrender.com/api";

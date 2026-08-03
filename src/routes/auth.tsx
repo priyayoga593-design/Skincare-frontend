@@ -146,12 +146,17 @@ function AuthPage() {
       if (err instanceof AuthError) {
         if (err.code === "EMPTY_EMAIL") setLoginErrors({ email: err.message });
         else if (err.code === "EMPTY_PASSWORD") setLoginErrors({ password: err.message });
-        else if (err.code === "WRONG_PASSWORD") setLoginErrors({ password: err.message });
-        else if (err.code === "USER_NOT_FOUND" || err.code === "INVALID_EMAIL_FORMAT")
+        else if (err.code === "INVALID_CREDENTIALS" || err.code === "WRONG_PASSWORD" || err.code === "USER_NOT_FOUND") {
+          setLoginErrors({ general: "Invalid email or password" });
+        } else if (err.code === "SERVER_UNAVAILABLE") {
+          setLoginErrors({ general: "Server unavailable. Please try again later." });
+        } else if (err.code === "INVALID_EMAIL_FORMAT") {
+          setLoginErrors({ email: err.message });
+        } else {
           setLoginErrors({ general: err.message });
-        else setLoginErrors({ general: err.message });
+        }
       } else {
-        setLoginErrors({ general: "Login failed. Please try again." });
+        setLoginErrors({ general: "Server unavailable. Please try again later." });
       }
     } finally {
       setLoading(false);

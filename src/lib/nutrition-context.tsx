@@ -1,5 +1,8 @@
 import React, { createContext, useContext, useState, useEffect, type ReactNode } from "react";
-import { analyzeFood } from "./nutrition-utils";
+import { db } from "@/firebase/firebase";
+import { collection, query, orderBy, onSnapshot, setDoc, doc, updateDoc, arrayUnion, arrayRemove, increment } from "firebase/firestore";
+import { useAuth } from "./auth-context";
+import { API_BASE_URL } from "./config";
 
 export type MealType = "breakfast" | "lunch" | "dinner" | "snack";
 
@@ -32,92 +35,109 @@ export interface DailyNutritionLog {
 interface NutritionContextType {
   dailyLogs: DailyNutritionLog[];
   todayLog: DailyNutritionLog;
-  addFood: (food: Omit<FoodItem, "id" | "isSkinUnfriendly">) => { isUnfriendly: boolean; reminder?: string; suggestion?: string };
-  removeFood: (id: string) => void;
-  updateWaterIntake: (amount: number) => void;
+  addFood: (food: Omit<FoodItem, "id" | "isSkinUnfriendly">) => Promise<{ isUnfriendly: boolean; reminder?: string; suggestion?: string }>;
+  removeFood: (food: FoodItem) => Promise<void>;
+  updateWaterIntake: (amount: number) => Promise<void>;
   remindersEnabled: boolean;
   setRemindersEnabled: (enabled: boolean) => void;
 }
 
 const NutritionContext = createContext<NutritionContextType | undefined>(undefined);
 
+const getTodayDateString = () => {
+  const d = new Date();
+  d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+  return d.toISOString().split("T")[0];
+};
+
 const defaultToday: DailyNutritionLog = {
-  date: new Date().toISOString().split("T")[0],
+  date: getTodayDateString(),
   foods: [],
   waterIntake: 0,
 };
 
 export function NutritionProvider({ children }: { children: ReactNode }) {
-  const [dailyLogs, setDailyLogs] = useState<DailyNutritionLog[]>([]);
+  const { user } = useAuth();
+  const [dailyLogs, setDailyLogs] = useState<DailyNutritionLog[]>([defaultToday]);
   const [remindersEnabled, setRemindersEnabled] = useState(true);
 
-  // Initialize with some mock data for reports if needed, or empty
+  const todayStr = getTodayDateString();
+
+  // Load chat history from Firestore
   useEffect(() => {
-    // Generate some mock historical data for the reports
-    const mockLogs: DailyNutritionLog[] = [];
-    for (let i = 1; i <= 7; i++) {
-      const d = new Date();
-      d.setDate(d.getDate() - i);
-      mockLogs.push({
-        date: d.toISOString().split("T")[0],
-        foods: [
-          {
-            id: `mock-${i}-1`,
-            name: "Oatmeal",
-            quantity: "1 bowl",
-            time: "08:00",
-            mealType: "breakfast",
-            calories: 300,
-            protein: 10,
-            carbs: 45,
-            fat: 5,
-            sugar: 2,
-            isSkinUnfriendly: false,
-          },
-          {
-            id: `mock-${i}-2`,
-            name: i % 2 === 0 ? "Pizza" : "Salad",
-            quantity: "1 portion",
-            time: "13:00",
-            mealType: "lunch",
-            calories: i % 2 === 0 ? 600 : 350,
-            isSkinUnfriendly: i % 2 === 0,
-          }
-        ],
-        waterIntake: 1500 + Math.random() * 1000,
-      });
+    if (!user?.uid) {
+      setDailyLogs([defaultToday]);
+      return;
     }
-    setDailyLogs([...mockLogs, defaultToday]);
-  }, []);
 
-  const todayLog = dailyLogs.find(l => l.date === defaultToday.date) || defaultToday;
+    const logsRef = collection(db, "users", user.uid, "nutritionLogs");
+    const q = query(logsRef, orderBy("date", "desc")); // Fetch recent logs
 
-  const addFood = (foodData: Omit<FoodItem, "id" | "isSkinUnfriendly">) => {
-    const analysis = analyzeFood(foodData.name);
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const loadedLogs = snapshot.docs.map((doc) => ({
+        date: doc.id,
+        ...doc.data(),
+      })) as DailyNutritionLog[];
+
+      // Ensure today exists
+      if (!loadedLogs.find(l => l.date === todayStr)) {
+        loadedLogs.unshift({ ...defaultToday, date: todayStr });
+      }
+
+      setDailyLogs(loadedLogs);
+    });
+
+    return () => unsubscribe();
+  }, [user?.uid, todayStr]);
+
+  const todayLog = dailyLogs.find(l => l.date === todayStr) || defaultToday;
+
+  const addFood = async (foodData: Omit<FoodItem, "id" | "isSkinUnfriendly">) => {
+    // Call the backend API
+    const apiUrl = `${API_BASE_URL}/analyze-food`;
+
+    let analysis = {
+      calories: 0, protein: 0, carbs: 0, fat: 0, sugar: 0, fibre: 0,
+      isSkinUnfriendly: false, reminder: "", suggestion: ""
+    };
+
+    try {
+      const response = await fetch(apiUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: foodData.name,
+          quantity: foodData.quantity
+        }),
+      });
+      const data = await response.json();
+      if (data.success && data.analysis) {
+        analysis = data.analysis;
+      }
+    } catch (err) {
+      console.error("[Nutrition] Failed to fetch AI analysis", err);
+    }
     
     const newFood: FoodItem = {
       ...foodData,
       id: Math.random().toString(36).substr(2, 9),
       isSkinUnfriendly: analysis.isSkinUnfriendly,
+      // Merge AI estimates with user's optional inputs (user input overrides)
+      calories: foodData.calories !== undefined ? foodData.calories : analysis.calories,
+      protein: foodData.protein !== undefined ? foodData.protein : analysis.protein,
+      carbs: foodData.carbs !== undefined ? foodData.carbs : analysis.carbs,
+      fat: foodData.fat !== undefined ? foodData.fat : analysis.fat,
+      sugar: foodData.sugar !== undefined ? foodData.sugar : analysis.sugar,
+      fibre: foodData.fibre !== undefined ? foodData.fibre : analysis.fibre,
     };
 
-    setDailyLogs(prev => {
-      const logs = [...prev];
-      const todayIndex = logs.findIndex(l => l.date === defaultToday.date);
-      if (todayIndex >= 0) {
-        logs[todayIndex] = {
-          ...logs[todayIndex],
-          foods: [...logs[todayIndex].foods, newFood],
-        };
-      } else {
-        logs.push({
-          date: defaultToday.date,
-          foods: [newFood],
-          waterIntake: 0,
-        });
-      }
-      return logs;
-    });
+    if (user?.uid) {
+      const docRef = doc(db, "users", user.uid, "nutritionLogs", todayStr);
+      await setDoc(docRef, {
+        foods: arrayUnion(newFood),
+        date: todayStr
+      }, { merge: true });
+    }
 
     return {
       isUnfriendly: analysis.isSkinUnfriendly,
@@ -126,32 +146,23 @@ export function NutritionProvider({ children }: { children: ReactNode }) {
     };
   };
 
-  const removeFood = (id: string) => {
-    setDailyLogs(prev => {
-      const logs = [...prev];
-      const todayIndex = logs.findIndex(l => l.date === defaultToday.date);
-      if (todayIndex >= 0) {
-        logs[todayIndex] = {
-          ...logs[todayIndex],
-          foods: logs[todayIndex].foods.filter(f => f.id !== id),
-        };
-      }
-      return logs;
-    });
+  const removeFood = async (food: FoodItem) => {
+    if (user?.uid) {
+      const docRef = doc(db, "users", user.uid, "nutritionLogs", todayStr);
+      await updateDoc(docRef, {
+        foods: arrayRemove(food)
+      });
+    }
   };
 
-  const updateWaterIntake = (amount: number) => {
-    setDailyLogs(prev => {
-      const logs = [...prev];
-      const todayIndex = logs.findIndex(l => l.date === defaultToday.date);
-      if (todayIndex >= 0) {
-        logs[todayIndex] = {
-          ...logs[todayIndex],
-          waterIntake: logs[todayIndex].waterIntake + amount,
-        };
-      }
-      return logs;
-    });
+  const updateWaterIntake = async (amount: number) => {
+    if (user?.uid) {
+      const docRef = doc(db, "users", user.uid, "nutritionLogs", todayStr);
+      await setDoc(docRef, {
+        waterIntake: increment(amount),
+        date: todayStr
+      }, { merge: true });
+    }
   };
 
   return (

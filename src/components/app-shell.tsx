@@ -1,7 +1,8 @@
 import { Link } from "@tanstack/react-router";
 import type { ReactNode } from "react";
-import { Sparkles, LogOut, User as UserIcon, Settings } from "lucide-react";
+import { Sparkles, LogOut, User as UserIcon, Settings, Bell, X } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
+import { useNotifications } from "@/lib/notification-context";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -23,6 +24,73 @@ const nav = [
   { to: "/progress", label: "Progress" },
   { to: "/assistant", label: "Assistant" },
 ] as const;
+
+function NotificationInbox() {
+  const { notifications, unreadCount, markAsRead, markAllAsRead, deleteNotification, sendTestNotification } = useNotifications();
+  
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button className="relative flex items-center justify-center rounded-full p-2 text-primary-foreground/80 hover:bg-white/10 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
+          <Bell className="size-5" />
+          {unreadCount > 0 && (
+            <span className="absolute top-1.5 right-1.5 size-2.5 rounded-full bg-destructive border-2 border-[oklch(0.452_0.062_18)]" />
+          )}
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-80 mt-1 rounded-2xl shadow-lift border-border bg-card max-h-[80vh] overflow-y-auto">
+        <div className="flex items-center justify-between px-4 py-2 border-b border-border">
+          <DropdownMenuLabel className="p-0 font-medium text-sm">Notifications</DropdownMenuLabel>
+          <div className="flex gap-2">
+             <button onClick={sendTestNotification} className="text-xs text-primary hover:underline">Test</button>
+             {unreadCount > 0 && (
+               <button onClick={markAllAsRead} className="text-xs text-primary hover:underline">Mark all read</button>
+             )}
+          </div>
+        </div>
+        {notifications.length === 0 ? (
+          <div className="p-8 text-center text-sm text-muted-foreground">
+            No notifications yet.
+          </div>
+        ) : (
+          <div className="flex flex-col py-1">
+            {notifications.map((n) => (
+              <div 
+                key={n.id} 
+                className={`group relative flex items-start px-4 py-3 cursor-pointer hover:bg-accent/10 transition-colors ${!n.read ? "bg-accent/5" : ""}`}
+              >
+                <div 
+                  className="flex gap-3 flex-1"
+                  onClick={() => !n.read && markAsRead(n.id)}
+                >
+                  {!n.read && <div className="mt-1.5 size-2 shrink-0 rounded-full bg-primary" />}
+                  <div className="flex flex-col gap-1 pr-6">
+                    <p className={`text-sm ${!n.read ? "font-semibold text-foreground" : "font-medium text-foreground/80"}`}>
+                      {n.title}
+                    </p>
+                    <p className="text-xs text-muted-foreground line-clamp-2">{n.message}</p>
+                    <span className="text-[10px] text-muted-foreground/60">
+                      {new Date(n.timestamp).toLocaleString()}
+                    </span>
+                  </div>
+                </div>
+                <button 
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    deleteNotification(n.id);
+                  }}
+                  className="absolute right-3 top-3 p-1 rounded-full text-muted-foreground hover:bg-destructive hover:text-destructive-foreground opacity-0 group-hover:opacity-100 transition-all"
+                >
+                  <X className="size-3.5" />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
 
 export function AppShell({ children }: { children: ReactNode }) {
   const { user, logout, isAuthenticated } = useAuth();
@@ -75,9 +143,10 @@ export function AppShell({ children }: { children: ReactNode }) {
             ))}
           </nav>
 
-          {/* User menu */}
+          {/* User menu & Notifications */}
           {isAuthenticated && user && (
-            <div className="ml-auto pl-2 shrink-0">
+            <div className="ml-auto pl-2 shrink-0 flex items-center gap-2">
+              <NotificationInbox />
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <button className="flex items-center gap-2 rounded-full p-0.5 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-primary">

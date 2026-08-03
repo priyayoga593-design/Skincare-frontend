@@ -162,6 +162,9 @@ function RootGuard({ children }: { children: ReactNode }) {
 }
 
 import { ReminderProvider } from "@/lib/reminder-context";
+import { ProductsProvider } from "@/lib/products-context";
+import { ProgressProvider } from "@/lib/progress-context";
+import { NotificationProvider } from "@/lib/notification-context";
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
@@ -170,16 +173,22 @@ function RootComponent() {
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
         <RootGuard>
-          <HealthProvider>
-            <ScanProvider>
+          <ScanProvider>
+            <HealthProvider>
               <NutritionProvider>
-                <ReminderProvider>
-                  {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
-                  <Outlet />
-                </ReminderProvider>
+                <ProductsProvider>
+                  <ProgressProvider>
+                    <ReminderProvider>
+                      <NotificationProvider>
+                        {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
+                        <Outlet />
+                      </NotificationProvider>
+                    </ReminderProvider>
+                  </ProgressProvider>
+                </ProductsProvider>
               </NutritionProvider>
-            </ScanProvider>
-          </HealthProvider>
+            </HealthProvider>
+          </ScanProvider>
         </RootGuard>
       </AuthProvider>
     </QueryClientProvider>

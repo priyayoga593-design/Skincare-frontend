@@ -1,4 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from "react";
+import { useAuth } from "./auth-context";
+import { useScan } from "./scan-context";
+import { API_BASE_URL } from "./config";
 
 export interface WaterLog {
   id: string;
@@ -52,6 +55,9 @@ interface HealthContextType {
 const HealthContext = createContext<HealthContextType | undefined>(undefined);
 
 export const HealthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { user } = useAuth();
+  const { currentScan } = useScan();
+  
   // --- WATER STATE ---
   const [waterGoal, setWaterGoalInternal] = useState(3000); // 3L default
   const [waterLogs, setWaterLogs] = useState<WaterLog[]>([]);
@@ -65,49 +71,7 @@ export const HealthProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const [stepSyncMethod, setStepSyncMethodInternal] = useState("sensor");
   const [stepsLogs, setStepsLogs] = useState<StepsLog[]>([]);
 
-  // Load health data from localStorage on mount
-  useEffect(() => {
-    const storedWaterGoal = localStorage.getItem("skincare360_water_goal");
-    const storedWaterLogs = localStorage.getItem("skincare360_water_logs");
-    const storedSleepLogs = localStorage.getItem("skincare360_sleep_logs");
-    const storedSleepSync = localStorage.getItem("skincare360_sleep_sync");
-    const storedStepsGoal = localStorage.getItem("skincare360_steps_goal");
-    const storedStepsLogs = localStorage.getItem("skincare360_steps_logs");
-    const storedStepsSync = localStorage.getItem("skincare360_steps_sync");
-
-    if (storedWaterGoal) setWaterGoalInternal(parseInt(storedWaterGoal));
-    if (storedWaterLogs) setWaterLogs(JSON.parse(storedWaterLogs));
-    
-    // Seed initial mock data if empty
-    if (storedSleepLogs) {
-      setSleepLogs(JSON.parse(storedSleepLogs));
-    } else {
-      const initialSleep: SleepLog[] = [
-        { id: "1", bedtime: "23:00", wakeup: "06:30", duration: 7.5, score: 82, method: "manual", date: getOffsetDateString(-2) },
-        { id: "2", bedtime: "23:30", wakeup: "06:00", duration: 6.5, score: 71, method: "google", date: getOffsetDateString(-1) },
-        { id: "3", bedtime: "00:15", wakeup: "06:40", duration: 6.4, score: 68, method: "manual", date: getTodayDateString() },
-      ];
-      setSleepLogs(initialSleep);
-      localStorage.setItem("skincare360_sleep_logs", JSON.stringify(initialSleep));
-    }
-
-    if (storedSleepSync) setSleepSyncMethodInternal(storedSleepSync as any);
-    if (storedStepsGoal) setStepsGoalInternal(parseInt(storedStepsGoal));
-
-    if (storedStepsLogs) {
-      setStepsLogs(JSON.parse(storedStepsLogs));
-    } else {
-      const initialSteps: StepsLog[] = [
-        { date: getOffsetDateString(-2), steps: 7200, calories: 288, distance: 5.4, method: "sensor" },
-        { date: getOffsetDateString(-1), steps: 9100, calories: 364, distance: 6.8, method: "google" },
-        { date: getTodayDateString(), steps: 5400, calories: 216, distance: 4.05, method: "sensor" },
-      ];
-      setStepsLogs(initialSteps);
-      localStorage.setItem("skincare360_steps_logs", JSON.stringify(initialSteps));
-    }
-
-    if (storedStepsSync) setStepSyncMethodInternal(storedStepsSync);
-  }, []);
+  const [aiRecommendations, setAiRecommendations] = useState<string[]>([]);
 
   // Helpers to get dates
   function getTodayDateString() {
@@ -115,32 +79,86 @@ export const HealthProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     return today.toISOString().split("T")[0];
   }
 
-  function getOffsetDateString(offset: number) {
-    const d = new Date();
-    d.setDate(d.getDate() + offset);
-    return d.toISOString().split("T")[0];
-  }
+  // Load health data from Backend on mount
+  useEffect(() => {
+    if (!user?.uid) {
+      setWaterLogs([]);
+      setSleepLogs([]);
+      setStepsLogs([]);
+      return;
+    }
+
+    const loadData = async () => {
+      try {
+        const apiUrl = `${API_BASE_URL}/health/${user.uid}`;
+          
+        const res = await fetch(apiUrl);
+        if (res.ok) {
+          const result = await res.json();
+          if (result.success && result.data) {
+            const data = result.data;
+            if (data.waterGoal !== undefined) setWaterGoalInternal(data.waterGoal);
+            if (data.waterLogs) setWaterLogs(data.waterLogs);
+            
+            if (data.sleepLogs) setSleepLogs(data.sleepLogs);
+            if (data.sleepSyncMethod) setSleepSyncMethodInternal(data.sleepSyncMethod);
+            
+            if (data.stepsGoal !== undefined) setStepsGoalInternal(data.stepsGoal);
+            if (data.stepsLogs) setStepsLogs(data.stepsLogs);
+            if (data.stepSyncMethod) setStepSyncMethodInternal(data.stepSyncMethod);
+          }
+        }
+      } catch (err) {
+        console.error("Failed to load health data", err);
+      }
+    };
+    
+    loadData();
+  }, [user?.uid]);
+
+  const apiUrlBase = `${API_BASE_URL}/health/${user?.uid}`;
 
   // --- WATER ACTIONS ---
-  const addWater = (amount: number) => {
+  const addWater = async (amount: number) => {
     const newLog: WaterLog = {
       id: Math.random().toString(36).substring(7),
       amount,
       timestamp: new Date().toISOString(),
     };
     const updated = [...waterLogs, newLog];
-    setWaterLogs(updated);
-    localStorage.setItem("skincare360_water_logs", JSON.stringify(updated));
+    setWaterLogs(updated); // Optimistic Update
+
+    if (user?.uid) {
+      try {
+        await fetch(`${apiUrlBase}/water`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ waterLogs: updated })
+        });
+      } catch (err) { console.error(err); }
+    }
   };
 
-  const setWaterGoal = (goal: number) => {
+  const setWaterGoal = async (goal: number) => {
     setWaterGoalInternal(goal);
-    localStorage.setItem("skincare360_water_goal", goal.toString());
+    if (user?.uid) {
+      try {
+        await fetch(`${apiUrlBase}/goals`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ waterGoal: goal })
+        });
+      } catch (err) { console.error(err); }
+    }
   };
 
-  const clearWaterLogs = () => {
+  const clearWaterLogs = async () => {
     setWaterLogs([]);
-    localStorage.setItem("skincare360_water_logs", JSON.stringify([]));
+    if (user?.uid) {
+      try {
+        await fetch(`${apiUrlBase}/water`, { method: "DELETE" });
+      } catch (err) { console.error(err); }
+    }
   };
 
   const todayWater = waterLogs
@@ -148,8 +166,7 @@ export const HealthProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     .reduce((sum, log) => sum + log.amount, 0);
 
   // --- SLEEP ACTIONS ---
-  const addSleep = (bedtime: string, wakeup: string, method: "manual" | "google" | "apple" = "manual") => {
-    // Calculate duration
+  const addSleep = async (bedtime: string, wakeup: string, method: "manual" | "google" | "apple" = "manual") => {
     const [bedH, bedM] = bedtime.split(":").map(Number);
     const [wakeH, wakeM] = wakeup.split(":").map(Number);
 
@@ -157,13 +174,10 @@ export const HealthProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     if (wakeH > bedH || (wakeH === bedH && wakeM >= bedM)) {
       duration = (wakeH * 60 + wakeM - (bedH * 60 + bedM)) / 60;
     } else {
-      // Overnight
       duration = (24 * 60 - (bedH * 60 + bedM) + (wakeH * 60 + wakeM)) / 60;
     }
     duration = Math.round(duration * 10) / 10;
 
-    // Calculate dynamic Sleep Score
-    // Ideal: 7.5 - 8.5 hours. Deduct points for too short or too long.
     let score = 100;
     if (duration < 7.5) {
       score -= (7.5 - duration) * 15;
@@ -182,31 +196,44 @@ export const HealthProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       date: getTodayDateString(),
     };
 
-    // Filter out existing log for today to replace it
     const updated = sleepLogs.filter((log) => log.date !== getTodayDateString()).concat(newLog);
     setSleepLogs(updated);
-    localStorage.setItem("skincare360_sleep_logs", JSON.stringify(updated));
+
+    if (user?.uid) {
+      try {
+        await fetch(`${apiUrlBase}/sleep`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ sleepLogs: updated })
+        });
+      } catch (err) { console.error(err); }
+    }
   };
 
-  const setSleepSyncMethod = (method: "manual" | "google" | "apple") => {
+  const setSleepSyncMethod = async (method: "manual" | "google" | "apple") => {
     setSleepSyncMethodInternal(method);
-    localStorage.setItem("skincare360_sleep_sync", method);
+    if (user?.uid) {
+      try {
+        await fetch(`${apiUrlBase}/sync`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ sleepSyncMethod: method })
+        });
+      } catch (err) { console.error(err); }
+    }
 
     if (method === "google" || method === "apple") {
-      // Simulate sync retrieve
-      setTimeout(() => {
-        addSleep("22:45", "07:00", method);
-      }, 1000);
+      setTimeout(() => { addSleep("22:45", "07:00", method); }, 1000);
     }
   };
 
   const todaySleep = sleepLogs.find((log) => log.date === getTodayDateString()) || null;
 
   // --- STEPS ACTIONS ---
-  const addSteps = (steps: number, method: string = "sensor") => {
+  const addSteps = async (steps: number, method: string = "sensor") => {
     const todayStr = getTodayDateString();
-    const calories = Math.round(steps * 0.04); // ~0.04 kcal per step
-    const distance = Math.round((steps * 0.00075) * 100) / 100; // ~0.75m per step
+    const calories = Math.round(steps * 0.04);
+    const distance = Math.round((steps * 0.00075) * 100) / 100;
 
     const newLog: StepsLog = {
       date: todayStr,
@@ -218,23 +245,45 @@ export const HealthProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
     const updated = stepsLogs.filter((log) => log.date !== todayStr).concat(newLog);
     setStepsLogs(updated);
-    localStorage.setItem("skincare360_steps_logs", JSON.stringify(updated));
+
+    if (user?.uid) {
+      try {
+        await fetch(`${apiUrlBase}/steps`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ stepsLogs: updated })
+        });
+      } catch (err) { console.error(err); }
+    }
   };
 
-  const setStepsGoal = (goal: number) => {
+  const setStepsGoal = async (goal: number) => {
     setStepsGoalInternal(goal);
-    localStorage.setItem("skincare360_steps_goal", goal.toString());
+    if (user?.uid) {
+      try {
+        await fetch(`${apiUrlBase}/goals`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ stepsGoal: goal })
+        });
+      } catch (err) { console.error(err); }
+    }
   };
 
-  const setStepSyncMethod = (method: string) => {
+  const setStepSyncMethod = async (method: string) => {
     setStepSyncMethodInternal(method);
-    localStorage.setItem("skincare360_steps_sync", method);
+    if (user?.uid) {
+      try {
+        await fetch(`${apiUrlBase}/sync`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ stepSyncMethod: method })
+        });
+      } catch (err) { console.error(err); }
+    }
 
     if (method !== "sensor" && method !== "manual") {
-      // Simulate sync retrieve
-      setTimeout(() => {
-        addSteps(10420, method);
-      }, 1000);
+      setTimeout(() => { addSteps(10420, method); }, 1000);
     }
   };
 
@@ -247,46 +296,41 @@ export const HealthProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   };
 
   // --- AI RECOMMENDATION ENGINE ---
-  const [aiRecommendations, setAiRecommendations] = useState<string[]>([]);
-
   useEffect(() => {
-    const recs: string[] = [];
-    const waterLitre = todayWater / 1000;
-    const sleepHrs = todaySleep?.duration || 6.4; // fallback to default
-    const stepsCount = todaySteps.steps;
+    const fetchInsights = async () => {
+      if (!user?.uid) return;
+      const waterLitre = todayWater / 1000;
+      const sleepHrs = todaySleep?.duration || 6.4;
+      const stepsCount = todaySteps.steps;
+      const skinType = currentScan?.skinType || "Unknown";
+      
+      try {
+        const query = new URLSearchParams({
+          water: waterLitre.toString(),
+          sleep: sleepHrs.toString(),
+          steps: stepsCount.toString(),
+          skinType
+        }).toString();
+        
+        const res = await fetch(`${apiUrlBase}/insights?${query}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.success && data.recommendations) {
+            setAiRecommendations(data.recommendations);
+          }
+        }
+      } catch (err) {
+        console.error("Failed to fetch AI insights", err);
+      }
+    };
 
-    // 1. Water analysis
-    if (waterLitre < 2) {
-      recs.push(`You drank only ${waterLitre.toFixed(1)} litres of water. Hydration is crucial for skin barrier healing.`);
-    }
+    // Debounce or only fetch when metrics change substantially to avoid spamming the backend
+    const timeout = setTimeout(() => {
+      fetchInsights();
+    }, 1500);
 
-    // 2. Sleep analysis
-    if (sleepHrs < 7) {
-      recs.push(`You slept only ${sleepHrs} hours. Lack of sleep triggers cortisol, leading to puffiness and breakouts.`);
-    }
-
-    // 3. Steps analysis
-    if (stepsCount < 6000) {
-      recs.push(`You walked only ${stepsCount.toLocaleString()} steps today. Movement boosts circulation, delivering oxygen to skin cells.`);
-    }
-
-    // 4. Synergistic recommendation
-    if (waterLitre < 2 || sleepHrs < 7 || stepsCount < 6000) {
-      const suggestions = [];
-      if (waterLitre < 2) suggestions.push("drink at least 3 litres of water");
-      if (sleepHrs < 7) suggestions.push("target 7–8 hours of sleep tonight");
-      if (stepsCount < 6000) suggestions.push("walk at least 8,000–10,000 steps");
-
-      recs.push(`Action plan: To balance your oily skin today, ${suggestions.join(", and ")}.`);
-    } else {
-      recs.push("Fantastic work! You met all your health targets today. Your skin renewal is optimal.");
-    }
-
-    // 5. Environmental/UV recommendations
-    recs.push("UV index is high (8) today. Sunscreen application and reapplication every 3 hours is non-negotiable.");
-
-    setAiRecommendations(recs);
-  }, [todayWater, todaySleep, todaySteps]);
+    return () => clearTimeout(timeout);
+  }, [todayWater, todaySleep?.duration, todaySteps.steps, currentScan?.skinType, user?.uid, apiUrlBase]);
 
   return (
     <HealthContext.Provider

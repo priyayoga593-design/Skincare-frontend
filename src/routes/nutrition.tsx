@@ -98,55 +98,64 @@ function NutritionPage() {
     setShowOptional(false);
   };
 
-  const handleAddFood = (e: React.FormEvent) => {
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const handleAddFood = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!foodName || !quantity) {
       toast.error("Please enter a food name and quantity.");
       return;
     }
 
-    const { isUnfriendly, reminder, suggestion } = addFood({
-      name: foodName,
-      quantity,
-      time,
-      mealType: selectedMeal,
-      calories: calories === "" ? undefined : calories,
-      protein: protein === "" ? undefined : protein,
-      carbs: carbs === "" ? undefined : carbs,
-      fat: fat === "" ? undefined : fat,
-      sugar: sugar === "" ? undefined : sugar,
-      fibre: fibre === "" ? undefined : fibre,
-      mood,
-      energyLevel: energy,
-      notes,
-    });
-
-    if (isUnfriendly && reminder) {
-      toast(reminder, {
-        icon: "💛",
-        style: {
-          background: "oklch(0.97 0.05 90)",
-          color: "oklch(0.3 0.1 90)",
-          borderColor: "oklch(0.9 0.1 90)",
-        },
+    setIsSubmitting(true);
+    try {
+      const { isUnfriendly, reminder, suggestion } = await addFood({
+        name: foodName,
+        quantity,
+        time,
+        mealType: selectedMeal,
+        calories: calories === "" ? undefined : calories,
+        protein: protein === "" ? undefined : protein,
+        carbs: carbs === "" ? undefined : carbs,
+        fat: fat === "" ? undefined : fat,
+        sugar: sugar === "" ? undefined : sugar,
+        fibre: fibre === "" ? undefined : fibre,
+        mood,
+        energyLevel: energy,
+        notes,
       });
-      if (suggestion) {
-        setTimeout(() => {
-          toast(`Healthy Alternative: Try ${suggestion} next time!`, {
-            icon: "✨",
-            style: {
-              background: "oklch(0.95 0.05 140)",
-              color: "oklch(0.3 0.1 140)",
-              borderColor: "oklch(0.85 0.1 140)",
-            },
-          });
-        }, 3000);
-      }
-    } else {
-      toast.success("Food logged successfully!");
-    }
 
-    resetForm();
+      if (isUnfriendly && reminder) {
+        toast(reminder, {
+          icon: "💛",
+          style: {
+            background: "oklch(0.97 0.05 90)",
+            color: "oklch(0.3 0.1 90)",
+            borderColor: "oklch(0.9 0.1 90)",
+          },
+        });
+        if (suggestion) {
+          setTimeout(() => {
+            toast(`Healthy Alternative: Try ${suggestion} next time!`, {
+              icon: "✨",
+              style: {
+                background: "oklch(0.95 0.05 140)",
+                color: "oklch(0.3 0.1 140)",
+                borderColor: "oklch(0.85 0.1 140)",
+              },
+            });
+          }, 3000);
+        }
+      } else {
+        toast.success("Food logged successfully!");
+      }
+
+      resetForm();
+    } catch (err) {
+      toast.error("Failed to log food. Please try again.");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   // Calculations for Summary
@@ -318,8 +327,14 @@ function NutritionPage() {
                 )}
               </div>
 
-              <Button type="submit" className="w-full h-12 text-base shadow-lg hover:shadow-primary/25 transition-all">
-                <Plus className="size-5 mr-2" /> Add Food to {selectedMeal.charAt(0).toUpperCase() + selectedMeal.slice(1)}
+              <Button type="submit" disabled={isSubmitting} className="w-full h-12 text-base shadow-lg hover:shadow-primary/25 transition-all">
+                {isSubmitting ? (
+                  "Analyzing Food..."
+                ) : (
+                  <>
+                    <Plus className="size-5 mr-2" /> Add Food to {selectedMeal.charAt(0).toUpperCase() + selectedMeal.slice(1)}
+                  </>
+                )}
               </Button>
             </form>
           </div>
@@ -363,7 +378,7 @@ function NutritionPage() {
                             </p>
                           </div>
                           <button 
-                            onClick={() => removeFood(food.id)}
+                            onClick={() => removeFood(food)}
                             className="p-2 text-muted-foreground hover:text-destructive transition-colors opacity-0 group-hover:opacity-100 bg-background/50 rounded-lg"
                           >
                             <Trash2 className="size-4" />

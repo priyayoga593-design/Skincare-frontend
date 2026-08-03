@@ -1,6 +1,12 @@
 import React, { createContext, useContext, useState, useEffect } from "react";
 import { profile as defaultProfile } from "./mock-data";
 
+// Firebase imports
+import { auth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signInWithPopup, GoogleAuthProvider, sendPasswordResetEmail, signOut, onAuthStateChanged } from "../firebase/firebase";
+import { db } from "../firebase/firebase";
+import { doc, setDoc, getDoc } from "firebase/firestore";
+import { API_BASE_URL } from "./config";
+
 export interface UserProfile {
   name: string;
   age: number;
@@ -50,13 +56,14 @@ export interface User {
   notifications: NotificationSettings;
 }
 
-// Error codes for type-safe error handling
 export type AuthErrorCode =
   | "EMPTY_EMAIL"
   | "EMPTY_PASSWORD"
   | "INVALID_EMAIL_FORMAT"
   | "WRONG_PASSWORD"
   | "USER_NOT_FOUND"
+  | "INVALID_CREDENTIALS"
+  | "SERVER_UNAVAILABLE"
   | "ACCOUNT_EXISTS"
   | "PASSWORDS_DONT_MATCH"
   | "WEAK_PASSWORD"
@@ -89,9 +96,13 @@ interface AuthContextType {
   googleLogin: (email: string, name: string, pictureUrl: string) => Promise<boolean>;
   appleLogin: (email: string, name: string) => Promise<boolean>;
   logout: () => void;
-  updateProfile: (profile: Partial<UserProfile>) => void;
+  updateProfile: (profile: Partial<UserProfile>, profilePicture?: string) => Promise<void>;
   updateNotifications: (notifications: Partial<NotificationSettings>) => void;
   forgotPassword: (email: string) => Promise<boolean>;
+  updateEmailAddress: (email: string) => Promise<boolean>;
+  updatePassword: (password: string) => Promise<boolean>;
+  logoutAllDevices: () => Promise<boolean>;
+  deleteAccount: () => Promise<boolean>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -116,31 +127,6 @@ const DEFAULT_NOTIFICATIONS: NotificationSettings = {
   },
 };
 
-// Password validation: ≥8 chars, uppercase, lowercase, number, special char
-export function validatePassword(password: string): { valid: boolean; message: string } {
-  if (password.length < 8) return { valid: false, message: "Password must be at least 8 characters." };
-  if (!/[A-Z]/.test(password)) return { valid: false, message: "Password must include at least one uppercase letter." };
-  if (!/[a-z]/.test(password)) return { valid: false, message: "Password must include at least one lowercase letter." };
-  if (!/[0-9]/.test(password)) return { valid: false, message: "Password must include at least one number." };
-  if (!/[^A-Za-z0-9]/.test(password)) return { valid: false, message: "Password must include at least one special character." };
-  return { valid: true, message: "" };
-}
-
-// Email format validation
-export function validateEmail(email: string): boolean {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-}
-
-// Password strength score 0-4
-export function getPasswordStrength(password: string): number {
-  let score = 0;
-  if (password.length >= 8) score++;
-  if (/[A-Z]/.test(password)) score++;
-  if (/[0-9]/.test(password)) score++;
-  if (/[^A-Za-z0-9]/.test(password)) score++;
-  return score;
-}
-
 function getDeviceInfo(): DeviceInfo {
   return {
     userAgent: navigator.userAgent,
@@ -150,121 +136,144 @@ function getDeviceInfo(): DeviceInfo {
     timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
   };
 }
+// Validation helpers
+export function validatePassword(password: string): { valid: boolean; message: string } {
+  if (password.length < 8) return { valid: false, message: "Password must be at least 8 characters." };
+  if (!/[A-Z]/.test(password)) return { valid: false, message: "Password must include at least one uppercase letter." };
+  if (!/[a-z]/.test(password)) return { valid: false, message: "Password must include at least one lowercase letter." };
+  if (!/[0-9]/.test(password)) return { valid: false, message: "Password must include at least one number." };
+  if (!/[^A-Za-z0-9]/.test(password)) return { valid: false, message: "Password must include at least one special character." };
+  return { valid: true, message: "" };
+}
+
+export function validateEmail(email: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+}
+
+export function getPasswordStrength(password: string): number {
+  let strength = 0;
+  if (password.length >= 8) strength++;
+  if (/[A-Z]/.test(password)) strength++;
+  if (/[a-z]/.test(password)) strength++;
+  if (/[0-9]/.test(password)) strength++;
+  if (/[^A-Za-z0-9]/.test(password)) strength++;
+  if (strength === 0) return 0;
+  if (strength <= 2) return 1; // weak
+  if (strength === 3) return 2; // fair
+  if (strength === 4) return 3; // good
+  return 4; // strong
+}
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Restore session on mount
+  // Listen to Firebase auth state changes – prevents infinite React update loops
   useEffect(() => {
-    const sessionToken = localStorage.getItem("skincare360_session_token");
-    const storedUser = localStorage.getItem("skincare360_user");
-
-    if (sessionToken && storedUser) {
-      try {
-        const parsed: User = JSON.parse(storedUser);
-        const expectedToken = btoa(parsed.uid + ":" + parsed.email);
-        if (sessionToken === expectedToken) {
-          // Update last login on session restore
-          const updatedUser = { ...parsed, lastLogin: new Date().toLocaleString(), deviceInfo: getDeviceInfo() };
-          setUser(updatedUser);
-          localStorage.setItem("skincare360_user", JSON.stringify(updatedUser));
-        } else {
-          clearSession();
-        }
-      } catch {
-        clearSession();
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      if (firebaseUser) {
+        const token = await firebaseUser.getIdToken();
+        const stored = localStorage.getItem("skincare360_user");
+        const parsed: User = stored
+          ? JSON.parse(stored)
+          : {
+              uid: firebaseUser.uid,
+              email: firebaseUser.email ?? "",
+              profile: defaultProfile,
+              registrationDate: new Date().toLocaleDateString(),
+              lastLogin: new Date().toLocaleString(),
+              loginMethod: "email",
+              notifications: DEFAULT_NOTIFICATIONS,
+            };
+        const updatedUser: User = {
+          ...parsed,
+          uid: firebaseUser.uid,
+          email: firebaseUser.email ?? parsed.email,
+          lastLogin: new Date().toLocaleString(),
+          deviceInfo: getDeviceInfo(),
+        };
+        localStorage.setItem("skincare360_session_token", token);
+        localStorage.setItem("skincare360_user", JSON.stringify(updatedUser));
+        setUser(updatedUser);
+      } else {
+        setUser(null);
+        localStorage.removeItem("skincare360_user");
+        localStorage.removeItem("skincare360_session_token");
       }
-    }
-    setIsLoading(false);
-
-    // Seed demo user if db is empty
-    if (!localStorage.getItem("firestore_users")) {
-      const demoUser = {
-        uid: "demo-aanya-sharma",
-        email: "user@example.com",
-        passwordHash: btoa("Password1!"),
-        profile: {
-          name: defaultProfile.name,
-          age: defaultProfile.age,
-          gender: defaultProfile.gender,
-          goals: defaultProfile.goals,
-          allergies: defaultProfile.allergies,
-          lastScan: defaultProfile.lastScan,
-        },
-        profilePicture:
-          "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=200&h=200",
-        registrationDate: new Date().toLocaleDateString(),
-        lastLogin: new Date().toLocaleString(),
-        loginMethod: "email",
-        notifications: DEFAULT_NOTIFICATIONS,
-      };
-      localStorage.setItem("firestore_users", JSON.stringify([demoUser]));
-    }
+      setIsLoading(false);
+    });
+    return () => unsubscribe();
   }, []);
-
-  const getUsersFromDb = (): any[] => {
-    const raw = localStorage.getItem("firestore_users");
-    return raw ? JSON.parse(raw) : [];
-  };
-
-  const saveUsersToDb = (users: any[]) => {
-    localStorage.setItem("firestore_users", JSON.stringify(users));
-  };
 
   const clearSession = () => {
     localStorage.removeItem("skincare360_user");
     localStorage.removeItem("skincare360_session_token");
   };
 
-  const persistSession = (u: User) => {
-    const sessionToken = btoa(u.uid + ":" + u.email);
-    localStorage.setItem("skincare360_session_token", sessionToken);
-    localStorage.setItem("skincare360_user", JSON.stringify(u));
-    setUser(u);
-  };
 
-  // ── LOGIN ────────────────────────────────────────────────────────────────
+  // ---- LOGIN ----
   const login = async (email: string, password: string): Promise<boolean> => {
-    // Field-level validation (exact error messages per spec)
     if (!email.trim()) throw new AuthError("EMPTY_EMAIL", "Please enter your email.");
     if (!password) throw new AuthError("EMPTY_PASSWORD", "Please enter your password.");
     if (!validateEmail(email)) throw new AuthError("INVALID_EMAIL_FORMAT", "Please enter a valid email address.");
-
-    return new Promise((resolve, reject) => {
-      setTimeout(() => {
-        const users = getUsersFromDb();
-        const found = users.find((u: any) => u.email.toLowerCase() === email.trim().toLowerCase());
-
-        if (!found) {
-          reject(new AuthError("USER_NOT_FOUND", "Incorrect Credentials"));
-          return;
+    try {
+      const userCredential = await signInWithEmailAndPassword(auth, email.trim(), password);
+      const firebaseUser = userCredential.user;
+      const token = await firebaseUser.getIdToken();
+      const loggedUser: User = {
+        uid: firebaseUser.uid,
+        email: firebaseUser.email ?? email.trim(),
+        profile: defaultProfile,
+        registrationDate: new Date().toLocaleDateString(),
+        lastLogin: new Date().toLocaleString(),
+        loginMethod: "email",
+        deviceInfo: getDeviceInfo(),
+        notifications: DEFAULT_NOTIFICATIONS,
+      };
+      await setDoc(doc(db, "users", loggedUser.uid), loggedUser, { merge: true });
+      localStorage.setItem("skincare360_session_token", token);
+      localStorage.setItem("skincare360_user", JSON.stringify(loggedUser));
+      setUser(loggedUser);
+      return true;
+    } catch (err: any) {
+      // Try Backend API Login as fallback (supports demo accounts user@example.com / Password1!)
+      try {
+        const res = await fetch(`${API_BASE_URL}/auth/login`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email: email.trim(), password }),
+        });
+        const data = await res.json();
+        if (data.success && data.user) {
+          const loggedUser: User = {
+            uid: data.user.uid,
+            email: data.user.email,
+            profile: data.user.profile || defaultProfile,
+            profilePicture: data.user.profilePicture,
+            registrationDate: data.user.registrationDate || new Date().toLocaleDateString(),
+            lastLogin: new Date().toLocaleString(),
+            loginMethod: "email",
+            deviceInfo: getDeviceInfo(),
+            notifications: DEFAULT_NOTIFICATIONS,
+          };
+          localStorage.setItem("skincare360_session_token", data.token || "demo_token");
+          localStorage.setItem("skincare360_user", JSON.stringify(loggedUser));
+          setUser(loggedUser);
+          return true;
         }
+      } catch (backendErr) {
+        console.error("Backend login fallback error:", backendErr);
+      }
 
-        if (found.passwordHash !== btoa(password)) {
-          reject(new AuthError("WRONG_PASSWORD", "Incorrect Password"));
-          return;
-        }
-
-        const loggedUser: User = {
-          ...found,
-          lastLogin: new Date().toLocaleString(),
-          loginMethod: "email",
-          deviceInfo: getDeviceInfo(),
-        };
-
-        // Update DB record
-        const idx = users.findIndex((u: any) => u.uid === found.uid);
-        users[idx] = { ...found, lastLogin: loggedUser.lastLogin };
-        saveUsersToDb(users);
-
-        persistSession(loggedUser);
-        resolve(true);
-      }, 500);
-    });
+      const code = err.code;
+      if (code === "auth/user-not-found" || code === "auth/wrong-password" || code === "auth/invalid-credential") {
+        throw new AuthError("INVALID_CREDENTIALS", "Invalid email or password");
+      }
+      throw new AuthError("SERVER_UNAVAILABLE", "Server unavailable. Please try again later.");
+    }
   };
 
-  // ── SIGNUP ───────────────────────────────────────────────────────────────
+  // ---- SIGNUP ----
   const signup = async (
     email: string,
     password: string,
@@ -275,156 +284,194 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     goals: string[],
     allergies: string[]
   ): Promise<boolean> => {
-    // Sequential field validations (per spec)
     if (!name.trim()) throw new AuthError("NAME_REQUIRED", "Please enter your name.");
     if (!email.trim()) throw new AuthError("EMPTY_EMAIL", "Please enter your email.");
     if (!validateEmail(email)) throw new AuthError("INVALID_EMAIL_FORMAT", "Please enter a valid email address.");
     if (!password) throw new AuthError("EMPTY_PASSWORD", "Please enter your password.");
-
     const pwdCheck = validatePassword(password);
     if (!pwdCheck.valid) throw new AuthError("WEAK_PASSWORD", pwdCheck.message);
-
     if (password !== confirmPassword) throw new AuthError("PASSWORDS_DONT_MATCH", "Passwords do not match.");
-
-    return new Promise((resolve, reject) => {
-      setTimeout(() => {
-        const users = getUsersFromDb();
-        const exists = users.some((u: any) => u.email.toLowerCase() === email.trim().toLowerCase());
-
-        if (exists) {
-          reject(new AuthError("ACCOUNT_EXISTS", "Account already exists."));
-          return;
-        }
-
-        const newUser: User = {
-          uid: "usr_" + Math.random().toString(36).substring(2, 11),
-          email: email.trim().toLowerCase(),
-          profile: {
-            name: name.trim(),
-            age,
-            gender,
-            goals,
-            allergies,
-            lastScan: "No scans yet",
-          },
-          profilePicture: `https://api.dicebear.com/7.x/adventurer/svg?seed=${encodeURIComponent(name)}`,
-          registrationDate: new Date().toLocaleDateString(),
-          lastLogin: new Date().toLocaleString(),
-          loginMethod: "email",
-          deviceInfo: getDeviceInfo(),
-          notifications: DEFAULT_NOTIFICATIONS,
-        };
-
-        const dbRecord = { ...newUser, passwordHash: btoa(password) };
-        users.push(dbRecord);
-        saveUsersToDb(users);
-        persistSession(newUser);
-        resolve(true);
-      }, 500);
-    });
+    try {
+      const userCredential = await createUserWithEmailAndPassword(auth, email.trim(), password);
+      const firebaseUser = userCredential.user;
+      const token = await firebaseUser.getIdToken();
+      const newUser: User = {
+        uid: firebaseUser.uid,
+        email: firebaseUser.email ?? email.trim(),
+        profile: { name, age, gender, goals, allergies, lastScan: "Just now" },
+        profilePicture: `https://api.dicebear.com/7.x/adventurer/svg?seed=${encodeURIComponent(name)}`,
+        registrationDate: new Date().toLocaleDateString(),
+        lastLogin: new Date().toLocaleString(),
+        loginMethod: "email",
+        deviceInfo: getDeviceInfo(),
+        notifications: DEFAULT_NOTIFICATIONS,
+      };
+      await setDoc(doc(db, "users", newUser.uid), newUser, { merge: true });
+      localStorage.setItem("skincare360_session_token", token);
+      localStorage.setItem("skincare360_user", JSON.stringify(newUser));
+      setUser(newUser);
+      return true;
+    } catch (err: any) {
+      const code = err.code;
+      if (code === "auth/email-already-in-use") {
+        throw new AuthError("ACCOUNT_EXISTS", "Account with this email already exists.");
+      }
+      throw new AuthError("SERVER_UNAVAILABLE", "Server unavailable. Please try again later.");
+    }
   };
 
-  // ── GOOGLE LOGIN ─────────────────────────────────────────────────────────
+  // ---- GOOGLE LOGIN ----
   const googleLogin = async (email: string, name: string, pictureUrl: string): Promise<boolean> => {
-    return new Promise((resolve) => {
-      setTimeout(() => {
-        const users = getUsersFromDb();
-        let found = users.find((u: any) => u.email.toLowerCase() === email.toLowerCase());
-
-        if (!found) {
-          const newUser: User = {
-            uid: "google_" + Math.random().toString(36).substring(2, 11),
-            email: email.toLowerCase(),
-            profile: {
-              name,
-              age: 26,
-              gender: "Female",
-              goals: ["Hydration"],
-              allergies: [],
-              lastScan: "No scans yet",
-            },
-            profilePicture: pictureUrl,
-            registrationDate: new Date().toLocaleDateString(),
-            lastLogin: new Date().toLocaleString(),
-            loginMethod: "google",
-            deviceInfo: getDeviceInfo(),
-            notifications: DEFAULT_NOTIFICATIONS,
-          };
-          found = { ...newUser, passwordHash: btoa("google-oauth") };
-          users.push(found);
-          saveUsersToDb(users);
-          persistSession(newUser);
-        } else {
-          const loggedUser: User = {
-            ...found,
-            lastLogin: new Date().toLocaleString(),
-            loginMethod: "google",
-            deviceInfo: getDeviceInfo(),
-          };
-          const idx = users.findIndex((u: any) => u.uid === found.uid);
-          users[idx] = { ...found, lastLogin: loggedUser.lastLogin };
-          saveUsersToDb(users);
-          persistSession(loggedUser);
-        }
-        resolve(true);
-      }, 500);
-    });
+    const provider = new GoogleAuthProvider();
+    try {
+      const result = await signInWithPopup(auth, provider);
+      const firebaseUser = result.user;
+      const token = await firebaseUser.getIdToken();
+      const loggedUser: User = {
+        uid: firebaseUser.uid,
+        email: firebaseUser.email ?? email,
+        profile: { name, age: 26, gender: "Female", goals: ["Hydration"], allergies: [], lastScan: "No scans yet" },
+        profilePicture: pictureUrl,
+        registrationDate: new Date().toLocaleDateString(),
+        lastLogin: new Date().toLocaleString(),
+        loginMethod: "google",
+        deviceInfo: getDeviceInfo(),
+        notifications: DEFAULT_NOTIFICATIONS,
+      };
+      await setDoc(doc(db, "users", loggedUser.uid), loggedUser, { merge: true });
+      localStorage.setItem("skincare360_session_token", token);
+      localStorage.setItem("skincare360_user", JSON.stringify(loggedUser));
+      setUser(loggedUser);
+      return true;
+    } catch (err) {
+      throw new AuthError("SERVER_UNAVAILABLE", "Google sign‑in failed.");
+    }
   };
 
-  // ── APPLE LOGIN ──────────────────────────────────────────────────────────
+  // ---- APPLE LOGIN (placeholder) ----
   const appleLogin = async (email: string, name: string): Promise<boolean> => {
-    return googleLogin(
-      email,
-      name,
-      `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(name)}`
-    );
+    // Placeholder – use Google flow for demo purposes
+    return googleLogin(email, name, `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(name)}`);
   };
 
-  // ── LOGOUT ───────────────────────────────────────────────────────────────
+  // ---- LOGOUT ----
   const logout = () => {
-    setUser(null);
-    clearSession();
+    signOut(auth)
+      .then(() => {
+        setUser(null);
+        clearSession();
+      })
+      .catch(() => {
+        setUser(null);
+        clearSession();
+      });
   };
 
-  // ── FORGOT PASSWORD ──────────────────────────────────────────────────────
+  // ---- FORGOT PASSWORD ----
   const forgotPassword = async (email: string): Promise<boolean> => {
     if (!email.trim()) throw new AuthError("EMPTY_EMAIL", "Please enter your email.");
     if (!validateEmail(email)) throw new AuthError("INVALID_EMAIL_FORMAT", "Please enter a valid email address.");
-
-    return new Promise((resolve, reject) => {
-      setTimeout(() => {
-        const users = getUsersFromDb();
-        const found = users.find((u: any) => u.email.toLowerCase() === email.trim().toLowerCase());
-
-        if (!found) {
-          reject(new AuthError("RESET_EMAIL_NOT_FOUND", "No account found with this email."));
-          return;
-        }
-        resolve(true); // In production: trigger Firebase sendPasswordResetEmail
-      }, 800);
-    });
+    try {
+      await sendPasswordResetEmail(auth, email.trim());
+      return true;
+    } catch (err) {
+      throw new AuthError("SERVER_UNAVAILABLE", "Failed to send password reset email.");
+    }
   };
 
-  // ── UPDATE PROFILE ───────────────────────────────────────────────────────
-  const updateProfile = (updatedProfile: Partial<UserProfile>) => {
+  // ---- UPDATE PROFILE ----
+  const updateProfile = async (updatedProfile: Partial<UserProfile>, profilePicture?: string) => {
     if (!user) return;
-    const updatedUser = { ...user, profile: { ...user.profile, ...updatedProfile } };
+    
+    // Optimistic UI Update
+    const updatedUser = { 
+      ...user, 
+      profile: { ...user.profile, ...updatedProfile },
+      ...(profilePicture && { profilePicture }) 
+    };
     setUser(updatedUser);
     localStorage.setItem("skincare360_user", JSON.stringify(updatedUser));
-    const users = getUsersFromDb();
-    const idx = users.findIndex((u: any) => u.uid === user.uid);
-    if (idx !== -1) { users[idx] = { ...users[idx], ...updatedUser }; saveUsersToDb(users); }
+
+    // Backend update
+    const apiUrlBase = `${API_BASE_URL}/profile/${user.uid}`;
+    
+    try {
+      await fetch(apiUrlBase, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ profile: updatedProfile, profilePicture }),
+      });
+    } catch (e) {
+      console.error("Failed to update profile to backend", e);
+    }
   };
 
-  // ── UPDATE NOTIFICATIONS ─────────────────────────────────────────────────
+  // ---- UPDATE NOTIFICATIONS ----
   const updateNotifications = (updatedNotifications: Partial<NotificationSettings>) => {
     if (!user) return;
     const updatedUser = { ...user, notifications: { ...user.notifications, ...updatedNotifications } };
     setUser(updatedUser);
     localStorage.setItem("skincare360_user", JSON.stringify(updatedUser));
-    const users = getUsersFromDb();
-    const idx = users.findIndex((u: any) => u.uid === user.uid);
-    if (idx !== -1) { users[idx] = { ...users[idx], ...updatedUser }; saveUsersToDb(users); }
+  };
+
+  // ---- ACCOUNT SECURITY ----
+  const getApiUrl = (path: string) => {
+    return `${API_BASE_URL}/${path}`;
+  };
+
+  const updateEmailAddress = async (email: string): Promise<boolean> => {
+    if (!user) return false;
+    try {
+      await fetch(getApiUrl(`account/${user.uid}/email`), {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
+      setUser({ ...user, email });
+      return true;
+    } catch (e) {
+      console.error("Failed to update email", e);
+      return false;
+    }
+  };
+
+  const updatePassword = async (password: string): Promise<boolean> => {
+    if (!user) return false;
+    try {
+      await fetch(getApiUrl(`account/${user.uid}/password`), {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password }),
+      });
+      return true;
+    } catch (e) {
+      console.error("Failed to update password", e);
+      return false;
+    }
+  };
+
+  const logoutAllDevices = async (): Promise<boolean> => {
+    if (!user) return false;
+    try {
+      await fetch(getApiUrl(`account/${user.uid}/logout-all`), { method: "POST" });
+      logout();
+      return true;
+    } catch (e) {
+      console.error("Failed to logout all devices", e);
+      return false;
+    }
+  };
+
+  const deleteAccount = async (): Promise<boolean> => {
+    if (!user) return false;
+    try {
+      await fetch(getApiUrl(`account/${user.uid}`), { method: "DELETE" });
+      logout();
+      return true;
+    } catch (e) {
+      console.error("Failed to delete account", e);
+      return false;
+    }
   };
 
   return (
@@ -441,6 +488,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         updateProfile,
         updateNotifications,
         forgotPassword,
+        updateEmailAddress,
+        updatePassword,
+        logoutAllDevices,
+        deleteAccount,
       }}
     >
       {children}

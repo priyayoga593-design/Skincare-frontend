@@ -9,13 +9,15 @@ import {
   YAxis,
   CartesianGrid,
 } from "recharts";
-import { TrendingUp, ScanFace, Camera, Upload, ArrowRight, BarChart3 } from "lucide-react";
+import { TrendingUp, ScanFace, Camera, Upload, ArrowRight, BarChart3, Trash2 } from "lucide-react";
 import { AppShell, PageHeader } from "@/components/app-shell";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useScan, ScanReport } from "@/lib/scan-context";
-import { progressSeries, skinAnalysis, habits } from "@/lib/mock-data";
-import { motion } from "framer-motion";
+import { useProgress } from "@/lib/progress-context";
+import { useAuth } from "@/lib/auth-context";
+import { motion, AnimatePresence } from "framer-motion";
+import { Loader2, Calendar } from "lucide-react";
 
 export const Route = createFileRoute("/progress")({
   head: () => ({
@@ -38,13 +40,67 @@ function scoreColor(score: number) {
 }
 
 function ProgressPage() {
-  const { scanHistory } = useScan();
+  const { scanHistory, deleteScan } = useScan();
+  const { reports, isLoading: reportsLoading, isGenerating, generateReport } = useProgress();
+  const { user } = useAuth();
+  
   const [compareA, setCompareA] = useState<number>(0);
   const [compareB, setCompareB] = useState<number>(1);
+  const [timeframe, setTimeframe] = useState<"daily" | "weekly" | "monthly">("weekly");
+  const [filterMonth, setFilterMonth] = useState<string>("All");
+  const [isComparing, setIsComparing] = useState(false);
+  const [aiComparison, setAiComparison] = useState<string | null>(null);
+
+  const availableMonths = useMemo(() => {
+    const months = new Set<string>();
+    scanHistory.forEach(s => {
+      const date = new Date(s.date);
+      months.add(date.toLocaleString("default", { month: "long", year: "numeric" }));
+    });
+    return ["All", ...Array.from(months)];
+  }, [scanHistory]);
+
+  const filteredHistory = useMemo(() => {
+    if (filterMonth === "All") return scanHistory;
+    return scanHistory.filter(s => {
+      const date = new Date(s.date);
+      return date.toLocaleString("default", { month: "long", year: "numeric" }) === filterMonth;
+    });
+  }, [scanHistory, filterMonth]);
+
+  const handleAICompare = async () => {
+    const reportA = scanHistory[compareA] ?? null;
+    const reportB = scanHistory[compareB] ?? null;
+    if (!reportA || !reportB || !user?.uid) return;
+    
+    setIsComparing(true);
+    setAiComparison(null);
+    try {
+      const apiUrl = window.location.hostname === "localhost" 
+        ? `http://localhost:5000/api/scans/${user.uid}/compare` 
+        : `http://${window.location.hostname}:5000/api/scans/${user.uid}/compare`;
+        
+      const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ scan1: reportA, scan2: reportB })
+      });
+      const data = await response.json();
+      if (data.success) {
+        setAiComparison(data.comparison);
+      } else {
+        console.error("AI Compare failed", data);
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsComparing(false);
+    }
+  };
 
   // Merge real scan history data into the trend chart (most recent 7 entries)
   const chartData = useMemo(() => {
-    if (scanHistory.length === 0) return progressSeries;
+    if (scanHistory.length === 0) return [];
     const real = [...scanHistory]
       .reverse()
       .slice(0, 7)
@@ -54,15 +110,15 @@ function ProgressPage() {
         hydration: s.hydrationScore,
         acne: 100 - s.acneScore,
       }));
-    return real.length >= 2 ? real : progressSeries;
+    return real;
   }, [scanHistory]);
 
-  const latestScore = scanHistory[0]?.healthScore ?? skinAnalysis.healthScore;
-  const latestHydration = scanHistory[0]?.hydrationScore ?? 68;
+  const latestScore = scanHistory.length > 0 ? scanHistory[0].healthScore : 0;
+  const latestHydration = scanHistory.length > 0 ? scanHistory[0].hydrationScore : 0;
   const scoreImprovement =
     scanHistory.length >= 2
-      ? `+${scanHistory[0].healthScore - scanHistory[scanHistory.length - 1].healthScore} pts`
-      : "+16 in 6 wks";
+      ? `${scanHistory[0].healthScore - scanHistory[scanHistory.length - 1].healthScore > 0 ? "+" : ""}${scanHistory[0].healthScore - scanHistory[scanHistory.length - 1].healthScore} pts`
+      : "Not enough data";
 
   const reportA: ScanReport | null = scanHistory[compareA] ?? null;
   const reportB: ScanReport | null = scanHistory[compareB] ?? null;
@@ -98,27 +154,15 @@ function ProgressPage() {
         </div>
         <div className="mt-6 h-72">
           <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={chartData}>
-              <CartesianGrid stroke="var(--color-border)" vertical={false} />
-              <XAxis
-                dataKey="day"
-                stroke="var(--color-muted-foreground)"
-                fontSize={12}
-                tickLine={false}
-                axisLine={false}
-              />
-              <YAxis
-                stroke="var(--color-muted-foreground)"
-                fontSize={12}
-                tickLine={false}
-                axisLine={false}
-                domain={[0, 100]}
-              />
-              <Tooltip
-                contentStyle={{
-                  background: "var(--color-card)",
-                  border: "1px solid var(--color-border)",
-                  borderRadius: "0.75rem",
+            <LineChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
+              <XAxis dataKey="day" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: "hsl(var(--muted-foreground))" }} dy={10} />
+              <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: "hsl(var(--muted-foreground))" }} />
+              <Tooltip 
+                contentStyle={{ 
+                  backgroundColor: "hsl(var(--card))", 
+                  borderColor: "hsl(var(--border))",
+                  borderRadius: "12px",
                   fontSize: "0.8rem",
                 }}
               />
@@ -133,9 +177,22 @@ function ProgressPage() {
       {/* ── Scan history list ─────────────────────────────────────── */}
       {scanHistory.length > 0 ? (
         <div className="surface mt-6 p-6">
-          <h2 className="text-xl mb-4">Scan History</h2>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-xl">Scan History</h2>
+            {availableMonths.length > 1 && (
+              <select 
+                value={filterMonth}
+                onChange={(e) => setFilterMonth(e.target.value)}
+                className="rounded-lg border border-input bg-background px-3 py-1.5 text-sm"
+              >
+                {availableMonths.map(m => (
+                  <option key={m} value={m}>{m}</option>
+                ))}
+              </select>
+            )}
+          </div>
           <div className="space-y-3">
-            {scanHistory.map((scan, i) => (
+            {filteredHistory.map((scan, i) => (
               <div
                 key={scan.id}
                 className="flex items-center gap-4 rounded-2xl bg-muted/40 p-4 transition-all hover:bg-muted/70"
@@ -147,7 +204,7 @@ function ProgressPage() {
                 />
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <p className="font-semibold text-sm">Scan #{scanHistory.length - i}</p>
+                    <p className="font-semibold text-sm">Scan #{scanHistory.length - scanHistory.indexOf(scan)}</p>
                     <span className="rounded-full bg-primary/10 px-2 py-0.5 text-2xs font-medium text-primary capitalize flex items-center gap-1">
                       {scan.method === "camera" ? <Camera className="size-3" /> : <Upload className="size-3" />}
                       {scan.method}
@@ -158,14 +215,30 @@ function ProgressPage() {
                     {scan.skinType} · {scan.skinTone} · {scan.undertone}
                   </p>
                 </div>
-                <div className="text-right shrink-0">
-                  <p className={`font-display text-2xl leading-none ${scoreColor(scan.healthScore)}`}>
-                    {scan.healthScore}
-                  </p>
-                  <p className="text-2xs text-muted-foreground mt-1">Health Score</p>
+                <div className="flex flex-col items-end shrink-0 gap-2">
+                  <div className="text-right">
+                    <p className={`font-display text-2xl leading-none ${scoreColor(scan.healthScore)}`}>
+                      {scan.healthScore}
+                    </p>
+                    <p className="text-2xs text-muted-foreground mt-1">Health Score</p>
+                  </div>
+                  <button
+                    onClick={() => {
+                      if (confirm("Are you sure you want to delete this scan?")) {
+                        deleteScan(scan.id);
+                      }
+                    }}
+                    className="p-1.5 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-md transition-colors"
+                    title="Delete Scan"
+                  >
+                    <Trash2 className="size-4" />
+                  </button>
                 </div>
               </div>
             ))}
+            {filteredHistory.length === 0 && (
+              <p className="text-center text-sm text-muted-foreground py-4">No scans found for this period.</p>
+            )}
           </div>
         </div>
       ) : (
@@ -198,7 +271,7 @@ function ProgressPage() {
                   const set = side === "A" ? setCompareA : setCompareB;
                   return (
                     <div key={side} className="space-y-1.5">
-                      <label className="text-xs text-muted-foreground font-medium">{side === "A" ? "Before" : "After"}</label>
+                      <label className="text-xs text-muted-foreground font-medium">{side === "A" ? "Older" : "Newer"}</label>
                       <select
                         value={idx}
                         onChange={(e) => set(Number(e.target.value))}
@@ -223,7 +296,7 @@ function ProgressPage() {
                       <div className="relative aspect-[3/2]">
                         <img src={r.imageDataUrl} alt="" className="w-full h-full object-cover" />
                         <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/60 p-3">
-                          <p className="text-xs text-white/80">{i === 0 ? "Before" : "After"}</p>
+                          <p className="text-xs text-white/80">{i === 0 ? "Older" : "Newer"}</p>
                           <p className={`font-display text-xl text-white`}>{r.healthScore}</p>
                         </div>
                       </div>
@@ -237,18 +310,42 @@ function ProgressPage() {
                 ))}
               </div>
 
-              {/* Delta */}
+              {/* Delta & AI Compare Button */}
               {reportA && reportB && (
-                <div className="mt-3 rounded-2xl bg-primary/10 border border-primary/20 p-3.5 flex items-center gap-3">
-                  <TrendingUp className="size-5 text-primary shrink-0" />
-                  <p className="text-sm">
-                    Skin health score changed by{" "}
-                    <strong className={reportB.healthScore >= reportA.healthScore ? "text-success" : "text-destructive"}>
-                      {reportB.healthScore >= reportA.healthScore ? "+" : ""}
-                      {reportB.healthScore - reportA.healthScore} pts
-                    </strong>{" "}
-                    between these scans.
-                  </p>
+                <div className="mt-4 space-y-3">
+                  <div className="rounded-2xl bg-primary/10 border border-primary/20 p-3.5 flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-3">
+                      <TrendingUp className="size-5 text-primary shrink-0" />
+                      <p className="text-sm">
+                        Skin health score changed by{" "}
+                        <strong className={reportB.healthScore >= reportA.healthScore ? "text-success" : "text-destructive"}>
+                          {reportB.healthScore >= reportA.healthScore ? "+" : ""}
+                          {reportB.healthScore - reportA.healthScore}
+                        </strong>{" "}
+                        points.
+                      </p>
+                    </div>
+                    <Button size="sm" onClick={handleAICompare} disabled={isComparing}>
+                      {isComparing ? <Loader2 className="size-4 animate-spin mr-2" /> : <ScanFace className="size-4 mr-2" />}
+                      Generate AI Comparison
+                    </Button>
+                  </div>
+                  
+                  {/* AI Insights Result */}
+                  <AnimatePresence>
+                    {aiComparison && (
+                      <motion.div 
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: "auto" }}
+                        className="rounded-2xl bg-muted/40 p-4 border border-border mt-3 text-sm"
+                      >
+                        <h4 className="font-medium mb-1 flex items-center gap-2">
+                          <ScanFace className="size-4 text-primary" /> AI Insights
+                        </h4>
+                        <p className="text-muted-foreground">{aiComparison}</p>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
                 </div>
               )}
             </>
@@ -264,20 +361,98 @@ function ProgressPage() {
           )}
         </div>
 
-        {/* Weekly report */}
-        <div className="surface p-6">
-          <h2 className="text-xl">Weekly Report</h2>
-          <ul className="mt-4 space-y-3 text-sm text-muted-foreground">
-            <li>Routine adherence: 83% (13 of 14 nights)</li>
-            <li>Water goal met on 4 of 7 days</li>
-            <li>Average sleep 6.4 h — biggest limiter</li>
-            <li>2 high-sugar entries correlated with chin flare-ups</li>
-            <li>Sunscreen reapplied on 5 of 7 days</li>
-          </ul>
-          <p className="mt-5 flex items-center gap-2 text-sm">
-            <TrendingUp className="size-4 text-success" />
-            Improvement rate: 27% since start
-          </p>
+        {/* AI Progress Report */}
+        <div className="surface p-6 flex flex-col">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-xl">AI Progress Report</h2>
+            <select
+              value={timeframe}
+              onChange={(e) => setTimeframe(e.target.value as any)}
+              className="h-8 rounded-lg border border-input bg-background px-2 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <option value="daily">Daily</option>
+              <option value="weekly">Weekly</option>
+              <option value="monthly">Monthly</option>
+            </select>
+          </div>
+
+          <div className="flex-1">
+            {reportsLoading ? (
+              <div className="h-full flex items-center justify-center py-10">
+                <Loader2 className="size-6 animate-spin text-primary" />
+              </div>
+            ) : reports[timeframe] ? (
+              <AnimatePresence mode="wait">
+                <motion.div
+                  key={timeframe}
+                  initial={{ opacity: 0, x: 10 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: -10 }}
+                  className="space-y-4"
+                >
+                  <p className="text-sm text-foreground/90 leading-relaxed">
+                    {reports[timeframe].overallProgress}
+                  </p>
+                  
+                  <div className="grid grid-cols-2 gap-3 pt-2">
+                    <div className="rounded-xl bg-muted/50 p-3">
+                      <p className="text-2xs text-muted-foreground uppercase tracking-wider font-semibold">Adherence Score</p>
+                      <p className={`text-xl font-display mt-1 ${scoreColor(reports[timeframe].adherenceScore)}`}>{reports[timeframe].adherenceScore}</p>
+                    </div>
+                    <div className="rounded-xl bg-muted/50 p-3">
+                      <p className="text-2xs text-muted-foreground uppercase tracking-wider font-semibold">Improvement</p>
+                      <p className="text-xl font-display mt-1 text-primary">{reports[timeframe].improvementRate}</p>
+                    </div>
+                  </div>
+
+                  <div>
+                    <h4 className="text-xs font-semibold text-foreground uppercase tracking-wider mb-2 mt-4">Key Insights</h4>
+                    <ul className="space-y-2 text-sm text-muted-foreground">
+                      {reports[timeframe].keyInsights.map((insight, i) => (
+                        <li key={i} className="flex items-start gap-2">
+                          <span className="shrink-0 mt-1 size-1.5 rounded-full bg-primary/60" />
+                          <span>{insight}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+
+                  <div>
+                    <h4 className="text-xs font-semibold text-foreground uppercase tracking-wider mb-2 mt-4">Actionable Steps</h4>
+                    <ul className="space-y-2 text-sm text-muted-foreground">
+                      {reports[timeframe].actionableSteps.map((step, i) => (
+                        <li key={i} className="flex items-start gap-2">
+                          <span className="shrink-0 mt-1 size-1.5 rounded-full bg-warning/60" />
+                          <span>{step}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                  
+                  <p className="text-2xs text-muted-foreground text-right pt-2 flex items-center justify-end gap-1 border-t border-border mt-4">
+                    <Calendar className="size-3" /> Generated: {new Date(reports[timeframe].generatedAt).toLocaleDateString()}
+                  </p>
+                </motion.div>
+              </AnimatePresence>
+            ) : (
+              <div className="text-center py-10 space-y-3">
+                <BarChart3 className="size-10 mx-auto text-muted-foreground/30" />
+                <p className="text-sm text-muted-foreground">No {timeframe} report generated yet.</p>
+              </div>
+            )}
+          </div>
+
+          <Button 
+            className="w-full mt-4" 
+            onClick={() => generateReport(timeframe)}
+            disabled={isGenerating || reportsLoading}
+          >
+            {isGenerating ? (
+              <><Loader2 className="mr-2 size-4 animate-spin" /> Analyzing...</>
+            ) : (
+              `Generate ${timeframe === 'daily' ? 'Daily' : timeframe === 'weekly' ? 'Weekly' : 'Monthly'} Report`
+            )}
+          </Button>
         </div>
       </div>
     </AppShell>

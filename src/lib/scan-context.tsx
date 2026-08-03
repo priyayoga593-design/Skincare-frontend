@@ -1,4 +1,9 @@
 import React, { createContext, useContext, useState, useEffect } from "react";
+import { useAuth } from "./auth-context";
+import { db, storage } from "../firebase/firebase";
+import { collection, query, getDocs, doc, setDoc, orderBy } from "firebase/firestore";
+import { ref, uploadString, getDownloadURL } from "firebase/storage";
+import { API_BASE_URL } from "./config";
 
 // ─── TYPES ────────────────────────────────────────────────────────────────────
 
@@ -95,6 +100,7 @@ interface ScanContextType {
   currentScan: ScanReport | null;
   analyzeImage: (imageDataUrl: string, method: "camera" | "upload") => Promise<ScanReport>;
   saveScan: (report: ScanReport) => void;
+  deleteScan: (scanId: string) => Promise<void>;
   clearCurrentScan: () => void;
 }
 
@@ -1167,30 +1173,109 @@ export async function analyzeImageStandalone(
 // ─── PROVIDER ─────────────────────────────────────────────────────────────────
 
 export const ScanProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { user } = useAuth();
   const [scanHistory, setScanHistory] = useState<ScanReport[]>([]);
   const [currentScan, setCurrentScan] = useState<ScanReport | null>(null);
 
+  // Load scan history from Backend API (if authenticated) or localStorage
   useEffect(() => {
-    const raw = localStorage.getItem("skincare360_scan_history");
-    if (raw) {
-      try { setScanHistory(JSON.parse(raw)); } catch { /* ignore */ }
-    }
-  }, []);
+    const loadHistory = async () => {
+      if (user?.uid) {
+        try {
+          const apiUrl = `${API_BASE_URL}/scans/${user.uid}`;
+          const response = await fetch(apiUrl);
+          if (response.ok) {
+            const data = await response.json();
+            if (data.success && data.scans) {
+              setScanHistory(data.scans);
+              console.log(`[ScanProvider] ✅ Loaded ${data.scans.length} scans from Backend API`);
+              return;
+            }
+          }
+        } catch (err) {
+          console.warn("[ScanProvider] ⚠️ Could not load from Backend API, using localStorage:", err);
+        }
+      }
+      // Fallback to localStorage
+      const raw = localStorage.getItem("skincare360_scan_history");
+      if (raw) {
+        try { setScanHistory(JSON.parse(raw)); } catch { /* ignore */ }
+      }
+    };
+    loadHistory();
+  }, [user?.uid]);
 
-  const saveScan = (report: ScanReport) => {
+  const saveScan = async (report: ScanReport) => {
     setCurrentScan(report);
     setScanHistory((prev) => {
       const updated = [report, ...prev.slice(0, 19)];
       localStorage.setItem("skincare360_scan_history", JSON.stringify(updated));
       return updated;
     });
+
+    // Persist to Firestore if user is authenticated
+    if (user?.uid) {
+      try {
+        let imageUrl = "";
+        if (report.imageDataUrl && report.imageDataUrl.startsWith("data:")) {
+          const storageRef = ref(storage, `users/${user.uid}/scans/${report.id}.jpg`);
+          await uploadString(storageRef, report.imageDataUrl, "data_url");
+          imageUrl = await getDownloadURL(storageRef);
+          console.log("[ScanProvider] ✅ Image uploaded to Firebase Storage");
+        }
+
+        const firestoreReport = {
+          ...report,
+          imageDataUrl: imageUrl,
+          userId: user.uid,
+          userEmail: user.email,
+          savedAt: new Date().toISOString(),
+        };
+
+        await setDoc(doc(db, "users", user.uid, "scans", report.id), firestoreReport);
+        console.log("[ScanProvider] ✅ Scan report saved to Firestore via Client SDK");
+      } catch (err) {
+        console.error("[ScanProvider] ❌ Failed to save to Firestore:", err);
+      }
+    }
+  };
+
+  const deleteScan = async (scanId: string) => {
+    if (!user?.uid) return;
+    try {
+      const apiUrl = `${API_BASE_URL}/scans/${user.uid}/${scanId}`;
+      
+      const response = await fetch(apiUrl, { method: "DELETE" });
+      if (response.ok) {
+        setScanHistory(prev => prev.filter(scan => scan.id !== scanId));
+        console.log(`[ScanProvider] ✅ Deleted scan ${scanId} via Backend API`);
+      } else {
+        console.error("[ScanProvider] ❌ Failed to delete scan from backend");
+      }
+    } catch (error) {
+      console.error("[ScanProvider] ❌ Error calling delete API:", error);
+    }
   };
 
   const analyzeImage = async (
     imageDataUrl: string,
     method: "camera" | "upload"
   ): Promise<ScanReport> => {
-    const report = await analyzeImageStandalone(imageDataUrl, method);
+    let report: ScanReport;
+    try {
+      const response = await fetch(`${API_BASE_URL}/scans/analyze`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ imageDataUrl, method }),
+      });
+      if (!response.ok) throw new Error(`Backend returned ${response.status}`);
+      const data = await response.json();
+      if (!data.success || !data.report) throw new Error(data.message || "Invalid response from backend");
+      report = { ...data.report, imageDataUrl };
+    } catch (err) {
+      console.warn("[ScanProvider] ⚠️ Backend unreachable, using local analysis:", err);
+      report = await analyzeImageStandalone(imageDataUrl, method);
+    }
     setCurrentScan(report);
     return report;
   };
@@ -1198,7 +1283,7 @@ export const ScanProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const clearCurrentScan = () => setCurrentScan(null);
 
   return (
-    <ScanContext.Provider value={{ scanHistory, currentScan, analyzeImage, saveScan, clearCurrentScan }}>
+    <ScanContext.Provider value={{ scanHistory, currentScan, analyzeImage, saveScan, deleteScan, clearCurrentScan }}>
       {children}
     </ScanContext.Provider>
   );

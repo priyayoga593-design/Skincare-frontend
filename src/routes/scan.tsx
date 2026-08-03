@@ -32,6 +32,7 @@ import { AppShell, PageHeader } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { useScan, ScanReport, SkinConcern } from "@/lib/scan-context";
+import { validateImage } from "@/lib/face-validation";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/scan")({
@@ -1057,6 +1058,17 @@ function ScanPage() {
     setCapturedImage(dataUrl);
     setStep("analyzing");
     try {
+      const validation = await validateImage(dataUrl);
+      if (!validation.valid) {
+        toast.error(validation.error || "Image validation failed. Please try again.");
+        setStep(method);
+        setCapturedImage(null);
+        return;
+      }
+      if (validation.isPoorQuality) {
+        toast.warning("Image is somewhat blurry. Results may be less accurate.");
+      }
+
       const result = await analyzeImage(dataUrl, method);
       setReport(result);
       setStep("report");

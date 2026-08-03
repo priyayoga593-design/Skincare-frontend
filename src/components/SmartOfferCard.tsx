@@ -1,11 +1,13 @@
-import { Star, ShieldCheck, Tag, ExternalLink, ShoppingCart, Percent } from "lucide-react";
+import { Star, ShieldCheck, Tag, ExternalLink, ShoppingCart, Percent, Heart } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Product } from "@/lib/mock-data";
+import { Product, useProducts } from "@/lib/products-context";
 import { motion } from "framer-motion";
 
 export function SmartOfferCard({ product: p }: { product: Product }) {
   const best = p.stores.find((s) => s.best) ?? p.stores[0];
+  const { favorites, toggleFavorite } = useProducts();
+  const isFavorite = favorites.includes(p.id);
 
   return (
     <motion.article 
@@ -37,8 +39,18 @@ export function SmartOfferCard({ product: p }: { product: Product }) {
               </span>
             </div>
             
-            <h2 className="mt-4 text-2xl font-semibold tracking-tight">{p.name}</h2>
-            <p className="text-sm font-medium text-muted-foreground uppercase tracking-wider mt-1">{p.brand}</p>
+            <div className="mt-4 flex items-start justify-between gap-4">
+              <div>
+                <h2 className="text-2xl font-semibold tracking-tight">{p.name}</h2>
+                <p className="text-sm font-medium text-muted-foreground uppercase tracking-wider mt-1">{p.brand}</p>
+              </div>
+              <button 
+                onClick={() => toggleFavorite(p.id)}
+                className="p-2 rounded-full hover:bg-muted/50 transition-colors shrink-0"
+              >
+                <Heart className={`size-6 ${isFavorite ? "fill-red-500 text-red-500" : "text-muted-foreground"}`} />
+              </button>
+            </div>
 
             <div className="mt-5 rounded-xl bg-gradient-to-r from-accent/50 to-transparent p-5 border border-accent">
               <p className="eyebrow flex items-center gap-2 text-primary">

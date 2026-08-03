@@ -1,7 +1,9 @@
 import React, { createContext, useContext, useState, useEffect } from "react";
 import { useScan } from "./scan-context";
+import { useAuth } from "./auth-context";
 import { toast } from "sonner";
 import { registerServiceWorker, scheduleLocalNotification } from "./push-notifications";
+import { API_BASE_URL } from "./config";
 
 export type ReminderType = 
   | "morning" 
@@ -49,8 +51,8 @@ const defaultReminders: ReminderSchedule[] = [
   { id: "afternoon", label: "Afternoon SPF Reapplication", time: "14:00", enabled: true, type: "afternoon", frequency: "daily" },
   { id: "evening", label: "Evening Routine", time: "18:00", enabled: false, type: "evening", frequency: "daily" },
   { id: "night", label: "Night Routine", time: "22:00", enabled: true, type: "night", frequency: "daily" },
-  { id: "weekly_mask", label: "Weekly Face Mask", time: "20:00", enabled: false, type: "weekly_mask", frequency: "weekly", days: [0] }, // Sunday
-  { id: "weekly_exf", label: "Weekly Exfoliation", time: "20:00", enabled: false, type: "weekly_exfoliation", frequency: "weekly", days: [3] }, // Wednesday
+  { id: "weekly_mask", label: "Weekly Face Mask", time: "20:00", enabled: false, type: "weekly_mask", frequency: "weekly", days: [0] },
+  { id: "weekly_exf", label: "Weekly Exfoliation", time: "20:00", enabled: false, type: "weekly_exfoliation", frequency: "weekly", days: [3] },
   { id: "water", label: "Water Intake", time: "10:00", enabled: true, type: "water", frequency: "daily" },
   { id: "refill", label: "Product Refill", time: "09:00", enabled: false, type: "refill", frequency: "monthly" },
   { id: "scan", label: "Follow-up Scan", time: "09:00", enabled: true, type: "scan", frequency: "monthly" },
@@ -64,39 +66,104 @@ export const ReminderProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [lastFired, setLastFired] = useState<Record<string, string>>({}); // id -> "YYYY-MM-DDTHH:mm"
   const [history, setHistory] = useState<ReminderHistoryItem[]>([]);
   const { currentScan } = useScan();
+  const { user } = useAuth();
 
   useEffect(() => {
     // Register SW on load
     registerServiceWorker();
-
-    const saved = localStorage.getItem("skincare360_reminders");
-    const master = localStorage.getItem("skincare360_reminders_master");
-    const fired = localStorage.getItem("skincare360_reminders_fired");
-    const hist = localStorage.getItem("skincare360_reminders_history");
     
-    if (saved) {
-      try { setReminders(JSON.parse(saved)); } catch (e) {}
-    }
-    if (master) setMasterEnabled(master === "true");
+    // Load local 'lastFired' state so we don't spam notifications on reload
+    const fired = localStorage.getItem("skincare360_reminders_fired");
     if (fired) {
       try { setLastFired(JSON.parse(fired)); } catch (e) {}
     }
-    if (hist) {
-      try { setHistory(JSON.parse(hist)); } catch (e) {}
+    
+    if (user?.uid) {
+      // Fetch from Backend
+      const fetchReminders = async () => {
+        try {
+          const apiUrl = `${API_BASE_URL}/reminders/${user.uid}`;
+          
+          const res = await fetch(apiUrl);
+          if (res.ok) {
+            const data = await res.json();
+            if (data.success) {
+              if (data.reminders && data.reminders.length > 0) {
+                // Merge loaded reminders with defaults just in case new defaults were added
+                const merged = defaultReminders.map(def => {
+                  const found = data.reminders.find((r: any) => r.id === def.id);
+                  return found ? { ...def, ...found } : def;
+                });
+                setReminders(merged);
+              }
+              setMasterEnabled(data.masterEnabled || false);
+              if (data.history) setHistory(data.history);
+            }
+          }
+        } catch (error) {
+          console.error("Failed to fetch reminders", error);
+        }
+      };
+      fetchReminders();
+    } else {
+      // Fallback to local storage if not logged in
+      const saved = localStorage.getItem("skincare360_reminders");
+      const master = localStorage.getItem("skincare360_reminders_master");
+      const hist = localStorage.getItem("skincare360_reminders_history");
+      if (saved) try { setReminders(JSON.parse(saved)); } catch (e) {}
+      if (master) setMasterEnabled(master === "true");
+      if (hist) try { setHistory(JSON.parse(hist)); } catch (e) {}
     }
-  }, []);
+  }, [user]);
 
-  const updateReminder = (id: string, updates: Partial<ReminderSchedule>) => {
+  const updateReminder = async (id: string, updates: Partial<ReminderSchedule>) => {
+    let updatedReminder: ReminderSchedule | undefined;
+    
     setReminders((prev) => {
-      const updated = prev.map((r) => (r.id === id ? { ...r, ...updates } : r));
-      localStorage.setItem("skincare360_reminders", JSON.stringify(updated));
+      const updated = prev.map((r) => {
+        if (r.id === id) {
+          updatedReminder = { ...r, ...updates };
+          return updatedReminder;
+        }
+        return r;
+      });
+      if (!user) localStorage.setItem("skincare360_reminders", JSON.stringify(updated));
       return updated;
     });
+
+    if (user?.uid && updatedReminder) {
+      try {
+        const apiUrl = `${API_BASE_URL}/reminders/${user.uid}`;
+        
+        await fetch(apiUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(updatedReminder),
+        });
+      } catch (e) {
+        console.error("Failed to save reminder to backend", e);
+      }
+    }
   };
 
   const setMasterEnabledWrapped = async (enabled: boolean) => {
     setMasterEnabled(enabled);
-    localStorage.setItem("skincare360_reminders_master", enabled ? "true" : "false");
+    if (!user) localStorage.setItem("skincare360_reminders_master", enabled ? "true" : "false");
+    
+    if (user?.uid) {
+      try {
+        const apiUrl = `${API_BASE_URL}/reminders/${user.uid}/settings`;
+        
+        await fetch(apiUrl, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ masterEnabled: enabled }),
+        });
+      } catch (e) {
+        console.error("Failed to save reminder settings", e);
+      }
+    }
+
     if (enabled) {
       await requestPermission();
     }
@@ -149,6 +216,28 @@ export const ReminderProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     }
   };
 
+  const saveHistoryEvent = async (newItem: ReminderHistoryItem) => {
+    setHistory((prev) => {
+      const updated = [newItem, ...prev].slice(0, 50);
+      if (!user) localStorage.setItem("skincare360_reminders_history", JSON.stringify(updated));
+      return updated;
+    });
+
+    if (user?.uid) {
+      try {
+        const apiUrl = `${API_BASE_URL}/reminders/${user.uid}/history`;
+          
+        await fetch(apiUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(newItem),
+        });
+      } catch (e) {
+        console.error("Failed to save history", e);
+      }
+    }
+  }
+
   const markCompleted = (reminderId: string) => {
     const reminder = reminders.find((r) => r.id === reminderId);
     if (!reminder) return;
@@ -162,11 +251,7 @@ export const ReminderProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       status: "completed"
     };
 
-    setHistory((prev) => {
-      const updated = [newItem, ...prev].slice(0, 50); // keep last 50
-      localStorage.setItem("skincare360_reminders_history", JSON.stringify(updated));
-      return updated;
-    });
+    saveHistoryEvent(newItem);
     toast.success(`${reminder.label} marked as completed!`);
   };
 
@@ -174,9 +259,16 @@ export const ReminderProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     const reminder = reminders.find((r) => r.id === reminderId);
     if (!reminder) return;
 
-    // We implement snooze by adjusting the lastFired state to a past date 
-    // so it doesn't refire immediately, and setting a timeout to fire again.
-    // A robust backend would just reschedule the job.
+    const newItem: ReminderHistoryItem = {
+      id: Math.random().toString(36).substring(7),
+      reminderId,
+      type: reminder.type,
+      label: reminder.label,
+      completedAt: new Date().toISOString(),
+      status: "snoozed"
+    };
+
+    saveHistoryEvent(newItem);
     toast.info(`${reminder.label} snoozed for ${minutes} minutes.`);
     
     setTimeout(() => {
@@ -223,7 +315,7 @@ export const ReminderProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         
         // Frequency checks
         if (reminder.frequency === "weekly" && reminder.days && !reminder.days.includes(currentDay)) return;
-        if (reminder.frequency === "monthly" && now.getDate() !== 1) return; // Simple monthly mock (1st of month)
+        if (reminder.frequency === "monthly" && now.getDate() !== 1) return;
 
         if (reminder.time === currentTime) {
           // Check if already fired today

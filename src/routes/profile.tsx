@@ -1,7 +1,9 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState, useEffect } from "react";
-import { User, Calendar, ShieldAlert, ArrowLeft, RefreshCw, Mail, Bell, Clock, CalendarDays } from "lucide-react";
+import { User, Calendar, ShieldAlert, ArrowLeft, RefreshCw, Mail, Bell, Clock, CalendarDays, Camera, Trash2, Key, MailIcon, ShieldCheck } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
+import { storage } from "@/firebase/firebase";
+import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { AppShell, PageHeader } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -31,11 +33,11 @@ const SKIN_GOALS_OPTIONS = [
   "Refine pores",
 ];
 
-type ProfileTab = "details" | "notifications";
+type ProfileTab = "details" | "notifications" | "security";
 
 function ProfilePage() {
   const navigate = useNavigate();
-  const { user, updateProfile, updateNotifications } = useAuth();
+  const { user, updateProfile, updateNotifications, updateEmailAddress, updatePassword, logoutAllDevices, deleteAccount } = useAuth();
   
   const [activeTab, setActiveTab] = useState<ProfileTab>("details");
 
@@ -45,7 +47,14 @@ function ProfilePage() {
   const [gender, setGender] = useState("Female");
   const [selectedGoals, setSelectedGoals] = useState<string[]>([]);
   const [allergies, setAllergies] = useState("");
+  const [profilePicture, setProfilePicture] = useState("");
   const [profileLoading, setProfileLoading] = useState(false);
+  const [uploadingImage, setUploadingImage] = useState(false);
+
+  // Security State
+  const [newEmail, setNewEmail] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [securityLoading, setSecurityLoading] = useState(false);
 
   // Notification Preferences State
   const [emailAlerts, setEmailAlerts] = useState(true);
@@ -72,6 +81,7 @@ function ProfilePage() {
       setGender(user.profile.gender);
       setSelectedGoals(user.profile.goals || []);
       setAllergies(user.profile.allergies?.join(", ") || "");
+      setProfilePicture(user.profilePicture || "");
 
       // Load notifications
       const notifs = user.notifications;
@@ -97,7 +107,26 @@ function ProfilePage() {
     );
   };
 
-  const handleProfileSave = (e: React.FormEvent) => {
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !user) return;
+
+    try {
+      setUploadingImage(true);
+      const storageRef = ref(storage, `profile_pictures/${user.uid}_${Date.now()}`);
+      await uploadBytes(storageRef, file);
+      const downloadURL = await getDownloadURL(storageRef);
+      setProfilePicture(downloadURL);
+      toast.success("Profile picture uploaded!");
+    } catch (error) {
+      console.error("Upload error:", error);
+      toast.error("Failed to upload image.");
+    } finally {
+      setUploadingImage(false);
+    }
+  };
+
+  const handleProfileSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name) {
       toast.error("Name is required.");
@@ -111,13 +140,13 @@ function ProfilePage() {
       .filter(Boolean);
 
     try {
-      updateProfile({
+      await updateProfile({
         name,
         age,
         gender,
         goals: selectedGoals,
         allergies: allergyList,
-      });
+      }, profilePicture);
       toast.success("Profile details updated successfully!");
     } catch {
       toast.error("Failed to update profile details.");
@@ -155,6 +184,48 @@ function ProfilePage() {
       toast.error("Failed to save notification preferences.");
     } finally {
       setNotifLoading(false);
+    }
+  };
+
+  const handleUpdateEmail = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newEmail) return;
+    setSecurityLoading(true);
+    const success = await updateEmailAddress(newEmail);
+    if (success) {
+      toast.success("Email address updated!");
+      setNewEmail("");
+    } else {
+      toast.error("Failed to update email.");
+    }
+    setSecurityLoading(false);
+  };
+
+  const handleUpdatePassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newPassword) return;
+    setSecurityLoading(true);
+    const success = await updatePassword(newPassword);
+    if (success) {
+      toast.success("Password updated!");
+      setNewPassword("");
+    } else {
+      toast.error("Failed to update password.");
+    }
+    setSecurityLoading(false);
+  };
+
+  const handleLogoutAll = async () => {
+    if (confirm("Are you sure you want to log out of all devices?")) {
+      const success = await logoutAllDevices();
+      if (!success) toast.error("Failed to log out of all devices.");
+    }
+  };
+
+  const handleDeleteAccount = async () => {
+    if (confirm("Are you ABSOLUTELY sure? This action cannot be undone.")) {
+      const success = await deleteAccount();
+      if (!success) toast.error("Failed to delete account.");
     }
   };
 
@@ -196,15 +267,41 @@ function ProfilePage() {
         >
           Notifications
         </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab("security")}
+          className={`flex-1 rounded-full py-2 text-center text-sm font-medium transition-all ${
+            activeTab === "security"
+              ? "bg-card text-foreground shadow-sm font-semibold"
+              : "text-muted-foreground hover:text-foreground"
+          }`}
+        >
+          Security
+        </button>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-[2fr_1fr]">
         <div className="surface p-6 sm:p-8 animate-fadeIn">
           {activeTab === "details" ? (
             <form onSubmit={handleProfileSave} className="space-y-6">
-              <h2 className="text-xl border-b border-border/60 pb-3 flex items-center gap-2">
-                <User className="size-5 text-primary" /> Personal Details
-              </h2>
+              <div className="flex items-center gap-4 mb-6">
+                <div className="relative group">
+                  <img 
+                    src={profilePicture || `https://api.dicebear.com/7.x/initials/svg?seed=${name}`} 
+                    alt="Profile" 
+                    className="size-20 rounded-full object-cover border-2 border-primary/20"
+                  />
+                  <label className="absolute inset-0 flex items-center justify-center bg-black/50 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer">
+                    <Camera className="size-6" />
+                    <input type="file" accept="image/*" className="hidden" onChange={handleImageUpload} disabled={uploadingImage} />
+                  </label>
+                  {uploadingImage && <div className="absolute inset-0 flex items-center justify-center bg-background/80 rounded-full"><RefreshCw className="size-5 animate-spin text-primary" /></div>}
+                </div>
+                <div>
+                  <h2 className="text-xl font-semibold">Personal Details</h2>
+                  <p className="text-sm text-muted-foreground">Update your photo and basic info.</p>
+                </div>
+              </div>
               
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-1.5">
@@ -318,7 +415,7 @@ function ProfilePage() {
                 </Button>
               </div>
             </form>
-          ) : (
+          ) : activeTab === "notifications" ? (
             <form onSubmit={handleNotificationsSave} className="space-y-6">
               <h2 className="text-xl border-b border-border/60 pb-3 flex items-center gap-2">
                 <Bell className="size-5 text-primary" /> Delivery Channels
@@ -450,6 +547,74 @@ function ProfilePage() {
                 </Button>
               </div>
             </form>
+          ) : (
+            <div className="space-y-6">
+              <h2 className="text-xl border-b border-border/60 pb-3 flex items-center gap-2">
+                <ShieldCheck className="size-5 text-primary" /> Account Security
+              </h2>
+
+              <div className="space-y-6">
+                <form onSubmit={handleUpdateEmail} className="space-y-3">
+                  <Label htmlFor="new-email">Update Email Address</Label>
+                  <div className="flex gap-3">
+                    <div className="relative flex-1">
+                      <MailIcon className="absolute left-3 top-3 size-4 text-muted-foreground" />
+                      <Input 
+                        id="new-email" 
+                        type="email" 
+                        placeholder={user?.email || "New Email"} 
+                        value={newEmail} 
+                        onChange={(e) => setNewEmail(e.target.value)} 
+                        className="pl-9"
+                      />
+                    </div>
+                    <Button type="submit" variant="secondary" disabled={securityLoading || !newEmail}>Update</Button>
+                  </div>
+                </form>
+
+                <form onSubmit={handleUpdatePassword} className="space-y-3 pt-4 border-t border-border/40">
+                  <Label htmlFor="new-password">Update Password</Label>
+                  <div className="flex gap-3">
+                    <div className="relative flex-1">
+                      <Key className="absolute left-3 top-3 size-4 text-muted-foreground" />
+                      <Input 
+                        id="new-password" 
+                        type="password" 
+                        placeholder="New Password" 
+                        value={newPassword} 
+                        onChange={(e) => setNewPassword(e.target.value)} 
+                        className="pl-9"
+                      />
+                    </div>
+                    <Button type="submit" variant="secondary" disabled={securityLoading || !newPassword}>Update</Button>
+                  </div>
+                </form>
+              </div>
+
+              <h2 className="text-xl border-b border-destructive/20 pb-3 pt-8 flex items-center gap-2 text-destructive">
+                <ShieldAlert className="size-5" /> Danger Zone
+              </h2>
+              
+              <div className="rounded-xl border border-destructive/20 bg-destructive/5 p-4 sm:p-6 space-y-4">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <h4 className="font-semibold text-foreground">Log out of all devices</h4>
+                    <p className="text-xs text-muted-foreground mt-1">Revoke all active sessions across browsers and devices.</p>
+                  </div>
+                  <Button variant="outline" onClick={handleLogoutAll} disabled={securityLoading}>Log out all</Button>
+                </div>
+                
+                <div className="flex items-start justify-between gap-4 border-t border-destructive/10 pt-4">
+                  <div>
+                    <h4 className="font-semibold text-destructive">Delete Account</h4>
+                    <p className="text-xs text-muted-foreground mt-1">Permanently remove your account and all associated health data.</p>
+                  </div>
+                  <Button variant="destructive" onClick={handleDeleteAccount} disabled={securityLoading} className="gap-2">
+                    <Trash2 className="size-4" /> Delete
+                  </Button>
+                </div>
+              </div>
+            </div>
           )}
         </div>
 

@@ -1,10 +1,12 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { AppShell, PageHeader } from "@/components/app-shell";
-import { products } from "@/lib/mock-data";
+import { useProducts } from "@/lib/products-context";
+import { useScan } from "@/lib/scan-context";
 import { SmartOfferCard } from "@/components/SmartOfferCard";
 import productsHero from "@/assets/products-hero.jpg";
 import { motion } from "framer-motion";
+import { Loader2, Sparkles } from "lucide-react";
 
 export const Route = createFileRoute("/products")({
   head: () => ({
@@ -27,8 +29,17 @@ export const Route = createFileRoute("/products")({
 });
 
 function ProductsPage() {
-  const [filter, setFilter] = useState<"All" | "Skincare" | "Makeup">("All");
-  const list = products.filter((p) => filter === "All" || p.category === filter);
+  const [filter, setFilter] = useState<"All" | "Skincare" | "Makeup" | "Favorites">("All");
+  const { products, favorites, isLoading, isGenerating, generateRecommendations } = useProducts();
+  const { currentScan } = useScan();
+
+  const list = products.filter((p) => {
+    if (filter === "Favorites") return favorites.includes(p.id);
+    if (filter === "All") return true;
+    return p.category === filter;
+  });
+
+  const skinTypeStr = currentScan?.skinType ? `Matched for ${currentScan.skinType}` : "AI Matched Products";
 
   return (
     <AppShell>
@@ -48,11 +59,11 @@ function ProductsPage() {
       </motion.div>
       <PageHeader
         eyebrow="Matching + smart shopping"
-        title="Matched for oily, medium, warm"
-        description="Nothing is pre-decided. After your scan the engine filters the catalogue on skin type, tone, undertone, concerns and your fragrance allergy — then compares live prices."
+        title={skinTypeStr}
+        description="Nothing is pre-decided. The AI engine filters the catalogue based on your skin type, concerns and goals — then compares live prices."
         action={
-          <div className="flex gap-1 rounded-full bg-muted p-1">
-            {(["All", "Skincare", "Makeup"] as const).map((f) => (
+          <div className="flex flex-wrap gap-1 rounded-full bg-muted p-1">
+            {(["All", "Skincare", "Makeup", "Favorites"] as const).map((f) => (
               <button
                 key={f}
                 onClick={() => setFilter(f)}
@@ -70,11 +81,55 @@ function ProductsPage() {
       />
 
       <div className="space-y-8 mt-8">
-        {list.map((p) => (
-          <SmartOfferCard key={p.id} product={p} />
-        ))}
+        {isLoading ? (
+          <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
+            <Loader2 className="h-8 w-8 animate-spin text-primary mb-4" />
+            <p>Loading your recommendations...</p>
+          </div>
+        ) : isGenerating ? (
+          <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
+            <Sparkles className="h-8 w-8 animate-pulse text-primary mb-4" />
+            <p>AI is analyzing your profile and generating matches...</p>
+          </div>
+        ) : products.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-16 text-center surface rounded-2xl">
+            <Sparkles className="h-12 w-12 text-muted-foreground mb-4 opacity-50" />
+            <h3 className="text-xl font-medium mb-2">No recommendations yet</h3>
+            <p className="text-muted-foreground mb-6 max-w-md mx-auto">
+              Let our AI analyze your skin profile and generate personalized skincare and makeup recommendations.
+            </p>
+            <button 
+              onClick={generateRecommendations}
+              className="btn-primary rounded-full px-6 py-3"
+            >
+              Generate AI Recommendations
+            </button>
+          </div>
+        ) : (
+          <>
+            <div className="flex justify-end mb-4">
+              <button 
+                onClick={generateRecommendations}
+                className="text-sm font-medium text-primary hover:underline flex items-center gap-1"
+              >
+                <Sparkles className="h-4 w-4" /> Refresh Recommendations
+              </button>
+            </div>
+            
+            {list.length === 0 ? (
+              <div className="text-center py-12 text-muted-foreground">
+                <p>No products found in this category.</p>
+              </div>
+            ) : (
+              list.map((p) => (
+                <SmartOfferCard key={p.id} product={p} />
+              ))
+            )}
+          </>
+        )}
       </div>
     </AppShell>
   );
 }
+
 

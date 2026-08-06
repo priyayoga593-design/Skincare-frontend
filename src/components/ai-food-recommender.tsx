@@ -402,17 +402,17 @@ export function AIFoodRecommender() {
 
           {/* Meal Filter Tabs */}
           <div className="flex rounded-full bg-muted p-1 text-xs font-medium self-start">
-            {(["all", "breakfast", "midmorning", "lunch", "eveningsnack", "dinner"] as const).map((tab) => (
+            {(["all", "breakfast", "lunch", "dinner", "snacks"] as const).map((tab) => (
               <button
                 key={tab}
-                onClick={() => setActiveTab(tab as any)}
-                className={`rounded-full px-3 py-1 text-xs capitalize transition-all ${
+                onClick={() => setActiveTab(tab)}
+                className={`rounded-full px-3 py-1 capitalize transition-all ${
                   activeTab === tab
                     ? "bg-background text-foreground shadow-xs font-semibold"
                     : "text-muted-foreground hover:text-foreground"
                 }`}
               >
-                {tab === "midmorning" ? "Mid-Morning" : tab === "eveningsnack" ? "Evening Snack" : tab}
+                {tab}
               </button>
             ))}
           </div>
@@ -447,10 +447,10 @@ export function AIFoodRecommender() {
           </Button>
         </form>
 
-        {/* MEAL CARDS GRID (5 MEAL TIMES) */}
+        {/* MEAL CARDS GRID */}
         {loadingMeals ? (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 py-8">
-            {[1, 2, 3, 4, 5].map((i) => (
+            {[1, 2, 3, 4].map((i) => (
               <div key={i} className="h-48 rounded-2xl border border-border bg-card/50 animate-pulse p-6 space-y-3">
                 <div className="h-6 bg-muted rounded-md w-2/3" />
                 <div className="h-4 bg-muted rounded-md w-full" />
@@ -461,7 +461,7 @@ export function AIFoodRecommender() {
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-            {/* 1. BREAKFAST */}
+            {/* BREAKFAST */}
             {(activeTab === "all" || activeTab === "breakfast") && recommendations?.breakfast && (
               <MealCard
                 meal={recommendations.breakfast}
@@ -471,17 +471,7 @@ export function AIFoodRecommender() {
               />
             )}
 
-            {/* 2. MID-MORNING SNACK */}
-            {(activeTab === "all" || activeTab === "midmorning") && (recommendations?.midMorningSnack || recommendations?.midmorning) && (
-              <MealCard
-                meal={recommendations.midMorningSnack || recommendations.midmorning}
-                mealType="snack"
-                onLog={handleLogMeal}
-                isLogging={loggingMealId === (recommendations.midMorningSnack?.title || recommendations.midmorning?.title)}
-              />
-            )}
-
-            {/* 3. LUNCH */}
+            {/* LUNCH */}
             {(activeTab === "all" || activeTab === "lunch") && recommendations?.lunch && (
               <MealCard
                 meal={recommendations.lunch}
@@ -491,17 +481,7 @@ export function AIFoodRecommender() {
               />
             )}
 
-            {/* 4. EVENING SNACK */}
-            {(activeTab === "all" || activeTab === "eveningsnack") && (recommendations?.eveningSnack || recommendations?.eveningsnack) && (
-              <MealCard
-                meal={recommendations.eveningSnack || recommendations.eveningsnack}
-                mealType="snack"
-                onLog={handleLogMeal}
-                isLogging={loggingMealId === (recommendations.eveningSnack?.title || recommendations.eveningsnack?.title)}
-              />
-            )}
-
-            {/* 5. DINNER */}
+            {/* DINNER */}
             {(activeTab === "all" || activeTab === "dinner") && recommendations?.dinner && (
               <MealCard
                 meal={recommendations.dinner}
@@ -511,8 +491,8 @@ export function AIFoodRecommender() {
               />
             )}
 
-            {/* OTHER SNACKS */}
-            {(activeTab === "all" || activeTab === "eveningsnack" || activeTab === "midmorning") && Array.isArray(recommendations?.snacks) && (
+            {/* SNACKS */}
+            {(activeTab === "all" || activeTab === "snacks") && Array.isArray(recommendations?.snacks) && (
               recommendations.snacks.map((snack: any, index: number) => (
                 <MealCard
                   key={index}

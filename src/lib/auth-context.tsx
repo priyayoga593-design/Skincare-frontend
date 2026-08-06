@@ -128,21 +128,12 @@ const DEFAULT_NOTIFICATIONS: NotificationSettings = {
 };
 
 function getDeviceInfo(): DeviceInfo {
-  if (typeof window === "undefined" || typeof navigator === "undefined") {
-    return {
-      userAgent: "Server",
-      platform: "Server",
-      language: "en",
-      screenResolution: "1920x1080",
-      timezone: "UTC",
-    };
-  }
   return {
-    userAgent: navigator.userAgent || "",
-    platform: navigator.platform || "",
-    language: navigator.language || "en",
-    screenResolution: window.screen ? `${window.screen.width}x${window.screen.height}` : "1920x1080",
-    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
+    userAgent: navigator.userAgent,
+    platform: navigator.platform,
+    language: navigator.language,
+    screenResolution: `${window.screen.width}x${window.screen.height}`,
+    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
   };
 }
 // Validation helpers
@@ -177,101 +168,41 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Listen to Firebase auth state changes with instant fallback & safety timeout
+  // Listen to Firebase auth state changes – prevents infinite React update loops
   useEffect(() => {
-    let resolved = false;
-
-    const timer = setTimeout(() => {
-      if (!resolved) {
-        resolved = true;
-        const stored = typeof localStorage !== "undefined" ? localStorage.getItem("skincare360_user") : null;
-        if (stored) {
-          try { setUser(JSON.parse(stored)); } catch (e) {}
-        } else {
-          const defaultDemoUser: User = {
-            uid: "demo-aanya-sharma",
-            email: "user@example.com",
-            profile: defaultProfile,
-            registrationDate: new Date().toLocaleDateString(),
-            lastLogin: new Date().toLocaleString(),
-            loginMethod: "email",
-            notifications: DEFAULT_NOTIFICATIONS,
-            deviceInfo: getDeviceInfo(),
-          };
-          setUser(defaultDemoUser);
-          if (typeof localStorage !== "undefined") {
-            localStorage.setItem("skincare360_user", JSON.stringify(defaultDemoUser));
-          }
-        }
-        setIsLoading(false);
-      }
-    }, 500);
-
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-      resolved = true;
-      clearTimeout(timer);
       if (firebaseUser) {
-        try {
-          const token = await firebaseUser.getIdToken();
-          const stored = typeof localStorage !== "undefined" ? localStorage.getItem("skincare360_user") : null;
-          const parsed: User = stored
-            ? JSON.parse(stored)
-            : {
-                uid: firebaseUser.uid,
-                email: firebaseUser.email ?? "",
-                profile: defaultProfile,
-                registrationDate: new Date().toLocaleDateString(),
-                lastLogin: new Date().toLocaleString(),
-                loginMethod: "email",
-                notifications: DEFAULT_NOTIFICATIONS,
-              };
-          const updatedUser: User = {
-            ...parsed,
-            uid: firebaseUser.uid,
-            email: firebaseUser.email ?? parsed.email,
-            lastLogin: new Date().toLocaleString(),
-            deviceInfo: getDeviceInfo(),
-          };
-          if (typeof localStorage !== "undefined") {
-            localStorage.setItem("skincare360_session_token", token);
-            localStorage.setItem("skincare360_user", JSON.stringify(updatedUser));
-          }
-          setUser(updatedUser);
-        } catch (err) {
-          console.warn("Auth token extraction warning", err);
-        }
+        const token = await firebaseUser.getIdToken();
+        const stored = localStorage.getItem("skincare360_user");
+        const parsed: User = stored
+          ? JSON.parse(stored)
+          : {
+              uid: firebaseUser.uid,
+              email: firebaseUser.email ?? "",
+              profile: defaultProfile,
+              registrationDate: new Date().toLocaleDateString(),
+              lastLogin: new Date().toLocaleString(),
+              loginMethod: "email",
+              notifications: DEFAULT_NOTIFICATIONS,
+            };
+        const updatedUser: User = {
+          ...parsed,
+          uid: firebaseUser.uid,
+          email: firebaseUser.email ?? parsed.email,
+          lastLogin: new Date().toLocaleString(),
+          deviceInfo: getDeviceInfo(),
+        };
+        localStorage.setItem("skincare360_session_token", token);
+        localStorage.setItem("skincare360_user", JSON.stringify(updatedUser));
+        setUser(updatedUser);
       } else {
-        const stored = typeof localStorage !== "undefined" ? localStorage.getItem("skincare360_user") : null;
-        if (stored) {
-          try {
-            setUser(JSON.parse(stored));
-          } catch (e) {
-            setUser(null);
-          }
-        } else {
-          const defaultDemoUser: User = {
-            uid: "demo-aanya-sharma",
-            email: "user@example.com",
-            profile: defaultProfile,
-            registrationDate: new Date().toLocaleDateString(),
-            lastLogin: new Date().toLocaleString(),
-            loginMethod: "email",
-            notifications: DEFAULT_NOTIFICATIONS,
-            deviceInfo: getDeviceInfo(),
-          };
-          setUser(defaultDemoUser);
-          if (typeof localStorage !== "undefined") {
-            localStorage.setItem("skincare360_user", JSON.stringify(defaultDemoUser));
-          }
-        }
+        setUser(null);
+        localStorage.removeItem("skincare360_user");
+        localStorage.removeItem("skincare360_session_token");
       }
       setIsLoading(false);
     });
-
-    return () => {
-      clearTimeout(timer);
-      unsubscribe();
-    };
+    return () => unsubscribe();
   }, []);
 
   const clearSession = () => {

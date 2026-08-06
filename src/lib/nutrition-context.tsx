@@ -52,14 +52,11 @@ interface NutritionContextType {
   setHealthGoal: (goal: string) => void;
   dietaryPreferences: string[];
   setDietaryPreferences: (prefs: string[]) => void;
-  validateFood: (name: string, quantity?: string) => Promise<{ valid: boolean; food?: any; message?: string }>;
   addFood: (food: Omit<FoodItem, "id" | "isSkinUnfriendly">) => Promise<{ isUnfriendly: boolean; reminder?: string; suggestion?: string }>;
   removeFood: (food: FoodItem) => Promise<void>;
   updateWaterIntake: (amount: number) => Promise<void>;
   calculateOptimalMacros: (scanReport?: any) => Promise<OptimalMacroTarget>;
   fetchMealRecommendations: (scanReport?: any, customQuery?: string) => Promise<any>;
-  getWeeklyAnalysis: () => Promise<any>;
-  getMonthlyAnalysis: () => Promise<any>;
   remindersEnabled: boolean;
   setRemindersEnabled: (enabled: boolean) => void;
 }
@@ -135,82 +132,65 @@ export function NutritionProvider({ children }: { children: ReactNode }) {
     waterIntake: typeof rawToday.waterIntake === "number" ? rawToday.waterIntake : 0,
   };
 
-  const validateFood = async (name: string, quantity: string = "1 serving") => {
-    try {
-      const response = await fetch(`${API_BASE_URL}/nutrition/validate-food`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, quantity }),
-      });
-      const data = await response.json();
-      if (!response.ok || !data.success || !data.valid) {
-        return { valid: false, message: data.message || "Please enter a valid food name." };
-      }
-      return { valid: true, food: data.food };
-    } catch (err) {
-      return { valid: false, message: "Please enter a valid food name." };
-    }
-  };
-
   const addFood = async (foodData: Omit<FoodItem, "id" | "isSkinUnfriendly">) => {
-    // 1. Validate food name with backend API
-    const validation = await validateFood(foodData.name, foodData.quantity);
-    if (!validation.valid || !validation.food) {
-      throw new Error("Please enter a valid food name.");
-    }
+    // 1. Call backend validation & analysis API
+    const apiUrl = `${API_BASE_URL}/validate-food`;
 
-    const validatedFood = validation.food;
-
-    // Call backend to store in DB / Firestore
-    let analysis = {
-      isSkinUnfriendly: validatedFood.isSkinUnfriendly,
-      reminder: validatedFood.reminder,
-      suggestion: validatedFood.suggestion
+    let analysis: any = {
+      calories: 0, protein: 0, carbs: 0, fat: 0, sugar: 0, fibre: 0,
+      isSkinUnfriendly: false, reminder: "", suggestion: ""
     };
 
-    try {
-      await fetch(`${API_BASE_URL}/nutrition/add-entry`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          userId: user?.uid || "demo-user",
-          name: validatedFood.name,
-          quantity: foodData.quantity,
-          mealType: foodData.mealType,
-          time: foodData.time,
-          calories: foodData.calories !== undefined ? foodData.calories : validatedFood.calories,
-          protein: foodData.protein !== undefined ? foodData.protein : validatedFood.protein,
-          carbs: foodData.carbs !== undefined ? foodData.carbs : validatedFood.carbs,
-          fat: foodData.fat !== undefined ? foodData.fat : validatedFood.fat,
-          fiber: foodData.fibre !== undefined ? foodData.fibre : validatedFood.fiber,
-          sugar: foodData.sugar !== undefined ? foodData.sugar : validatedFood.sugar,
-          sodium: validatedFood.sodium || 100,
-          notes: foodData.notes
-        }),
-      });
-    } catch (err) {
-      console.error("[Nutrition] Failed to sync entry with backend", err);
+    const response = await fetch(apiUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: foodData.name,
+        quantity: foodData.quantity
+      }),
+    });
+
+    const data = await response.json();
+    if (!response.ok || !data.success || data.isValid === false) {
+      throw new Error(data.message || "Please enter a valid food name.");
+    }
+
+    if (data.analysis) {
+      analysis = data.analysis;
     }
     
     const newFood: FoodItem = {
       ...foodData,
-      name: validatedFood.name,
       id: Math.random().toString(36).substr(2, 9),
-      isSkinUnfriendly: validatedFood.isSkinUnfriendly,
-      calories: foodData.calories !== undefined ? foodData.calories : validatedFood.calories,
-      protein: foodData.protein !== undefined ? foodData.protein : validatedFood.protein,
-      carbs: foodData.carbs !== undefined ? foodData.carbs : validatedFood.carbs,
-      fat: foodData.fat !== undefined ? foodData.fat : validatedFood.fat,
-      sugar: foodData.sugar !== undefined ? foodData.sugar : validatedFood.sugar,
-      fibre: foodData.fibre !== undefined ? foodData.fibre : validatedFood.fiber,
+      isSkinUnfriendly: !!analysis.isSkinUnfriendly,
+      // Merge AI estimates with user's optional inputs (user input overrides)
+      calories: foodData.calories !== undefined ? foodData.calories : analysis.calories,
+      protein: foodData.protein !== undefined ? foodData.protein : analysis.protein,
+      carbs: foodData.carbs !== undefined ? foodData.carbs : analysis.carbs,
+      fat: foodData.fat !== undefined ? foodData.fat : analysis.fat,
+      sugar: foodData.sugar !== undefined ? foodData.sugar : analysis.sugar,
+      fibre: foodData.fibre !== undefined ? foodData.fibre : analysis.fibre,
     };
 
+    // 2. Dual Database Sync: Save to Cloud Firestore & Backend DB API
     if (user?.uid) {
-      const docRef = doc(db, "users", user.uid, "nutritionLogs", todayStr);
-      await setDoc(docRef, {
-        foods: arrayUnion(newFood),
-        date: todayStr
-      }, { merge: true });
+      try {
+        // Backend DB sync endpoint
+        await fetch(`${API_BASE_URL}/nutrition/${user.uid}/log`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ food: newFood, date: todayStr }),
+        });
+
+        // Firestore direct sync
+        const docRef = doc(db, "users", user.uid, "nutritionLogs", todayStr);
+        await setDoc(docRef, {
+          foods: arrayUnion(newFood),
+          date: todayStr
+        }, { merge: true });
+      } catch (err) {
+        console.warn("[Nutrition Sync Warning]", err);
+      }
     }
 
     return {
@@ -222,10 +202,18 @@ export function NutritionProvider({ children }: { children: ReactNode }) {
 
   const removeFood = async (food: FoodItem) => {
     if (user?.uid) {
-      const docRef = doc(db, "users", user.uid, "nutritionLogs", todayStr);
-      await updateDoc(docRef, {
-        foods: arrayRemove(food)
-      });
+      try {
+        await fetch(`${API_BASE_URL}/nutrition/${user.uid}/log/${food.id}?date=${todayStr}`, {
+          method: "DELETE"
+        });
+
+        const docRef = doc(db, "users", user.uid, "nutritionLogs", todayStr);
+        await updateDoc(docRef, {
+          foods: arrayRemove(food)
+        });
+      } catch (err) {
+        console.warn("[Delete Sync Error]", err);
+      }
     }
   };
 
@@ -315,32 +303,6 @@ export function NutritionProvider({ children }: { children: ReactNode }) {
     return null;
   };
 
-  const getWeeklyAnalysis = async () => {
-    try {
-      const response = await fetch(`${API_BASE_URL}/nutrition/weekly-analysis/${user?.uid || "demo-user"}`);
-      const data = await response.json();
-      if (data.success && data.weeklyReport) {
-        return data.weeklyReport;
-      }
-    } catch (err) {
-      console.error("Failed to fetch weekly analysis", err);
-    }
-    return null;
-  };
-
-  const getMonthlyAnalysis = async () => {
-    try {
-      const response = await fetch(`${API_BASE_URL}/nutrition/monthly-analysis/${user?.uid || "demo-user"}`);
-      const data = await response.json();
-      if (data.success && data.monthlyReport) {
-        return data.monthlyReport;
-      }
-    } catch (err) {
-      console.error("Failed to fetch monthly analysis", err);
-    }
-    return null;
-  };
-
   return (
     <NutritionContext.Provider
       value={{
@@ -351,14 +313,11 @@ export function NutritionProvider({ children }: { children: ReactNode }) {
         setHealthGoal,
         dietaryPreferences,
         setDietaryPreferences,
-        validateFood,
         addFood,
         removeFood,
         updateWaterIntake,
         calculateOptimalMacros,
         fetchMealRecommendations,
-        getWeeklyAnalysis,
-        getMonthlyAnalysis,
         remindersEnabled,
         setRemindersEnabled,
       }}

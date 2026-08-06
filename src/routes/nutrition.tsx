@@ -30,6 +30,7 @@ import {
 } from "recharts";
 import { AppShell, PageHeader } from "@/components/app-shell";
 import { useNutrition, type MealType } from "@/lib/nutrition-context";
+import { AIFoodRecommender } from "@/components/ai-food-recommender";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -43,14 +44,14 @@ export const Route = createFileRoute("/nutrition")({
       { title: "Health & Nutrition — 360° Skincare" },
       {
         name: "description",
-        content: "Daily food tracker, smart skin-friendly detection, and nutrition summary.",
+        content: "Daily food tracker, smart skin-friendly detection, AI meal recommendation engine, and nutrition summary.",
       },
     ],
   }),
   component: NutritionPage,
 });
 
-type TabView = "today" | "summary" | "reports" | "settings";
+type TabView = "ai-recommendations" | "today" | "summary" | "reports" | "settings";
 
 function NutritionPage() {
   const {
@@ -63,7 +64,7 @@ function NutritionPage() {
     setRemindersEnabled
   } = useNutrition();
 
-  const [activeTab, setActiveTab] = useState<TabView>("today");
+  const [activeTab, setActiveTab] = useState<TabView>("ai-recommendations");
 
   // Form State
   const [selectedMeal, setSelectedMeal] = useState<MealType>("breakfast");
@@ -151,8 +152,8 @@ function NutritionPage() {
       }
 
       resetForm();
-    } catch (err) {
-      toast.error("Failed to log food. Please try again.");
+    } catch (err: any) {
+      toast.error(err?.message || "Please enter a valid food name.");
     } finally {
       setIsSubmitting(false);
     }
@@ -196,20 +197,27 @@ function NutritionPage() {
 
       {/* Tabs */}
       <div className="mb-6 flex rounded-full bg-muted p-1 overflow-x-auto select-none">
-        {(["today", "summary", "reports", "settings"] as TabView[]).map((tab) => (
+        {(["ai-recommendations", "today", "summary", "reports", "settings"] as TabView[]).map((tab) => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
-            className={`flex-1 min-w-[6rem] rounded-full py-2 text-center text-sm font-medium transition-all capitalize ${
+            className={`flex-1 min-w-[7rem] rounded-full py-2.5 px-3 text-center text-sm font-medium transition-all capitalize ${
               activeTab === tab
-                ? "bg-card text-foreground shadow-sm font-semibold"
+                ? "bg-card text-primary shadow-sm font-bold"
                 : "text-muted-foreground hover:text-foreground"
             }`}
           >
-            {tab === "today" ? "Today's Log" : tab}
+            {tab === "ai-recommendations" ? "✨ AI Meal Engine" : tab === "today" ? "Today's Intake Log" : tab}
           </button>
         ))}
       </div>
+
+      {/* AI RECOMMENDATIONS TAB */}
+      {activeTab === "ai-recommendations" && (
+        <div className="animate-fadeIn">
+          <AIFoodRecommender />
+        </div>
+      )}
 
       {/* TODAY'S LOG TAB */}
       {activeTab === "today" && (

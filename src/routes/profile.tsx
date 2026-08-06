@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState, useEffect } from "react";
-import { User, Calendar, ShieldAlert, ArrowLeft, RefreshCw, Mail, Bell, Clock, CalendarDays, Camera, Trash2, Key, MailIcon, ShieldCheck } from "lucide-react";
+import { User, Calendar, ShieldAlert, ArrowLeft, RefreshCw, Mail, Bell, Clock, CalendarDays, Camera, Trash2, Key, MailIcon, ShieldCheck, Sparkles } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import { storage } from "@/firebase/firebase";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";

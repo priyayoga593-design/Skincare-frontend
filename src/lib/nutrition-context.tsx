@@ -32,12 +32,34 @@ export interface DailyNutritionLog {
   waterIntake: number; // in ml
 }
 
+export interface OptimalMacroTarget {
+  calories: number;
+  carbs: number;
+  protein: number;
+  fat: number;
+  ratios?: { carbs: number; protein: number; fat: number };
+  bmr?: number;
+  tdee?: number;
+  micronutrients?: Record<string, { amount: string; benefit: string }>;
+  skinFocusReason?: string;
+}
+
 interface NutritionContextType {
   dailyLogs: DailyNutritionLog[];
   todayLog: DailyNutritionLog;
+  optimalMacros: OptimalMacroTarget;
+  healthGoal: string;
+  setHealthGoal: (goal: string) => void;
+  dietaryPreferences: string[];
+  setDietaryPreferences: (prefs: string[]) => void;
+  validateFood: (name: string, quantity?: string) => Promise<{ valid: boolean; food?: any; message?: string }>;
   addFood: (food: Omit<FoodItem, "id" | "isSkinUnfriendly">) => Promise<{ isUnfriendly: boolean; reminder?: string; suggestion?: string }>;
   removeFood: (food: FoodItem) => Promise<void>;
   updateWaterIntake: (amount: number) => Promise<void>;
+  calculateOptimalMacros: (scanReport?: any) => Promise<OptimalMacroTarget>;
+  fetchMealRecommendations: (scanReport?: any, customQuery?: string) => Promise<any>;
+  getWeeklyAnalysis: () => Promise<any>;
+  getMonthlyAnalysis: () => Promise<any>;
   remindersEnabled: boolean;
   setRemindersEnabled: (enabled: boolean) => void;
 }
@@ -56,10 +78,22 @@ const defaultToday: DailyNutritionLog = {
   waterIntake: 0,
 };
 
+const defaultOptimalMacros: OptimalMacroTarget = {
+  calories: 2000,
+  carbs: 225,
+  protein: 125,
+  fat: 67,
+  ratios: { carbs: 45, protein: 25, fat: 30 },
+  skinFocusReason: "Balanced nutrient intake for clear, radiant skin."
+};
+
 export function NutritionProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
   const [dailyLogs, setDailyLogs] = useState<DailyNutritionLog[]>([defaultToday]);
   const [remindersEnabled, setRemindersEnabled] = useState(true);
+  const [healthGoal, setHealthGoal] = useState<string>("skin_glow");
+  const [dietaryPreferences, setDietaryPreferences] = useState<string[]>([]);
+  const [optimalMacros, setOptimalMacros] = useState<OptimalMacroTarget>(defaultOptimalMacros);
 
   const todayStr = getTodayDateString();
 
@@ -101,43 +135,74 @@ export function NutritionProvider({ children }: { children: ReactNode }) {
     waterIntake: typeof rawToday.waterIntake === "number" ? rawToday.waterIntake : 0,
   };
 
-  const addFood = async (foodData: Omit<FoodItem, "id" | "isSkinUnfriendly">) => {
-    // Call the backend API
-    const apiUrl = `${API_BASE_URL}/analyze-food`;
+  const validateFood = async (name: string, quantity: string = "1 serving") => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/nutrition/validate-food`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, quantity }),
+      });
+      const data = await response.json();
+      if (!response.ok || !data.success || !data.valid) {
+        return { valid: false, message: data.message || "Please enter a valid food name." };
+      }
+      return { valid: true, food: data.food };
+    } catch (err) {
+      return { valid: false, message: "Please enter a valid food name." };
+    }
+  };
 
+  const addFood = async (foodData: Omit<FoodItem, "id" | "isSkinUnfriendly">) => {
+    // 1. Validate food name with backend API
+    const validation = await validateFood(foodData.name, foodData.quantity);
+    if (!validation.valid || !validation.food) {
+      throw new Error("Please enter a valid food name.");
+    }
+
+    const validatedFood = validation.food;
+
+    // Call backend to store in DB / Firestore
     let analysis = {
-      calories: 0, protein: 0, carbs: 0, fat: 0, sugar: 0, fibre: 0,
-      isSkinUnfriendly: false, reminder: "", suggestion: ""
+      isSkinUnfriendly: validatedFood.isSkinUnfriendly,
+      reminder: validatedFood.reminder,
+      suggestion: validatedFood.suggestion
     };
 
     try {
-      const response = await fetch(apiUrl, {
+      await fetch(`${API_BASE_URL}/nutrition/add-entry`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          name: foodData.name,
-          quantity: foodData.quantity
+          userId: user?.uid || "demo-user",
+          name: validatedFood.name,
+          quantity: foodData.quantity,
+          mealType: foodData.mealType,
+          time: foodData.time,
+          calories: foodData.calories !== undefined ? foodData.calories : validatedFood.calories,
+          protein: foodData.protein !== undefined ? foodData.protein : validatedFood.protein,
+          carbs: foodData.carbs !== undefined ? foodData.carbs : validatedFood.carbs,
+          fat: foodData.fat !== undefined ? foodData.fat : validatedFood.fat,
+          fiber: foodData.fibre !== undefined ? foodData.fibre : validatedFood.fiber,
+          sugar: foodData.sugar !== undefined ? foodData.sugar : validatedFood.sugar,
+          sodium: validatedFood.sodium || 100,
+          notes: foodData.notes
         }),
       });
-      const data = await response.json();
-      if (data.success && data.analysis) {
-        analysis = data.analysis;
-      }
     } catch (err) {
-      console.error("[Nutrition] Failed to fetch AI analysis", err);
+      console.error("[Nutrition] Failed to sync entry with backend", err);
     }
     
     const newFood: FoodItem = {
       ...foodData,
+      name: validatedFood.name,
       id: Math.random().toString(36).substr(2, 9),
-      isSkinUnfriendly: analysis.isSkinUnfriendly,
-      // Merge AI estimates with user's optional inputs (user input overrides)
-      calories: foodData.calories !== undefined ? foodData.calories : analysis.calories,
-      protein: foodData.protein !== undefined ? foodData.protein : analysis.protein,
-      carbs: foodData.carbs !== undefined ? foodData.carbs : analysis.carbs,
-      fat: foodData.fat !== undefined ? foodData.fat : analysis.fat,
-      sugar: foodData.sugar !== undefined ? foodData.sugar : analysis.sugar,
-      fibre: foodData.fibre !== undefined ? foodData.fibre : analysis.fibre,
+      isSkinUnfriendly: validatedFood.isSkinUnfriendly,
+      calories: foodData.calories !== undefined ? foodData.calories : validatedFood.calories,
+      protein: foodData.protein !== undefined ? foodData.protein : validatedFood.protein,
+      carbs: foodData.carbs !== undefined ? foodData.carbs : validatedFood.carbs,
+      fat: foodData.fat !== undefined ? foodData.fat : validatedFood.fat,
+      sugar: foodData.sugar !== undefined ? foodData.sugar : validatedFood.sugar,
+      fibre: foodData.fibre !== undefined ? foodData.fibre : validatedFood.fiber,
     };
 
     if (user?.uid) {
@@ -174,14 +239,126 @@ export function NutritionProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const calculateOptimalMacros = async (scanReport?: any) => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/calculate-optimal-macros`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          age: user?.profile?.age || 26,
+          gender: user?.profile?.gender || "Female",
+          weight: 62,
+          height: 165,
+          activityLevel: "moderate",
+          healthGoal,
+          skinScan: scanReport || null,
+          dietaryPreferences
+        }),
+      });
+
+      const data = await response.json();
+      if (data.success && data.data?.optimalMacros) {
+        const fullData: OptimalMacroTarget = {
+          calories: data.data.optimalMacros.calories,
+          carbs: data.data.optimalMacros.carbs,
+          protein: data.data.optimalMacros.protein,
+          fat: data.data.optimalMacros.fat,
+          ratios: data.data.optimalMacros.ratios,
+          bmr: data.data.bmr,
+          tdee: data.data.tdee,
+          micronutrients: data.data.micronutrients,
+          skinFocusReason: data.data.skinFocusReason
+        };
+        setOptimalMacros(fullData);
+        return fullData;
+      }
+    } catch (err) {
+      console.error("Failed to calculate optimal macros", err);
+    }
+    return defaultOptimalMacros;
+  };
+
+  const fetchMealRecommendations = async (scanReport?: any, customQuery: string = "") => {
+    try {
+      const foodsList = todayLog?.foods || [];
+      const eatenCalories = foodsList.reduce((acc, f) => acc + (f?.calories || 0), 0);
+      const eatenProtein = foodsList.reduce((acc, f) => acc + (f?.protein || 0), 0);
+      const eatenCarbs = foodsList.reduce((acc, f) => acc + (f?.carbs || 0), 0);
+      const eatenFat = foodsList.reduce((acc, f) => acc + (f?.fat || 0), 0);
+
+      const response = await fetch(`${API_BASE_URL}/recommend-meals`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          skinScan: scanReport || null,
+          dailyIntake: {
+            calories: eatenCalories,
+            carbs: eatenCarbs,
+            protein: eatenProtein,
+            fat: eatenFat,
+            foods: foodsList
+          },
+          optimalMacros,
+          healthGoal,
+          dietaryPreferences,
+          customQuery
+        }),
+      });
+
+      const data = await response.json();
+      if (data.success && data.recommendations) {
+        return data.recommendations;
+      }
+    } catch (err) {
+      console.error("Failed to fetch meal recommendations", err);
+    }
+    return null;
+  };
+
+  const getWeeklyAnalysis = async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/nutrition/weekly-analysis/${user?.uid || "demo-user"}`);
+      const data = await response.json();
+      if (data.success && data.weeklyReport) {
+        return data.weeklyReport;
+      }
+    } catch (err) {
+      console.error("Failed to fetch weekly analysis", err);
+    }
+    return null;
+  };
+
+  const getMonthlyAnalysis = async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/nutrition/monthly-analysis/${user?.uid || "demo-user"}`);
+      const data = await response.json();
+      if (data.success && data.monthlyReport) {
+        return data.monthlyReport;
+      }
+    } catch (err) {
+      console.error("Failed to fetch monthly analysis", err);
+    }
+    return null;
+  };
+
   return (
     <NutritionContext.Provider
       value={{
         dailyLogs,
         todayLog,
+        optimalMacros,
+        healthGoal,
+        setHealthGoal,
+        dietaryPreferences,
+        setDietaryPreferences,
+        validateFood,
         addFood,
         removeFood,
         updateWaterIntake,
+        calculateOptimalMacros,
+        fetchMealRecommendations,
+        getWeeklyAnalysis,
+        getMonthlyAnalysis,
         remindersEnabled,
         setRemindersEnabled,
       }}

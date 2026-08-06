@@ -128,12 +128,21 @@ const DEFAULT_NOTIFICATIONS: NotificationSettings = {
 };
 
 function getDeviceInfo(): DeviceInfo {
+  if (typeof window === "undefined" || typeof navigator === "undefined") {
+    return {
+      userAgent: "Server",
+      platform: "Server",
+      language: "en",
+      screenResolution: "1920x1080",
+      timezone: "UTC",
+    };
+  }
   return {
-    userAgent: navigator.userAgent,
-    platform: navigator.platform,
-    language: navigator.language,
-    screenResolution: `${window.screen.width}x${window.screen.height}`,
-    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+    userAgent: navigator.userAgent || "",
+    platform: navigator.platform || "",
+    language: navigator.language || "en",
+    screenResolution: window.screen ? `${window.screen.width}x${window.screen.height}` : "1920x1080",
+    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
   };
 }
 // Validation helpers

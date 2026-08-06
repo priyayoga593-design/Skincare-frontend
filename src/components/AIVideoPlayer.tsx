@@ -1,27 +1,56 @@
-import { useState, useEffect, useRef } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import { 
-  Play, Pause, Maximize, Volume2, VolumeX, Sparkles, CheckCircle2, RotateCcw, TrendingUp
-} from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Product, skinAnalysis } from "@/lib/mock-data";
+export type SubtitlesMap = {
+  en?: string;
+  es?: string;
+  fr?: string;
+  hi?: string;
+  de?: string;
+  ja?: string;
+  ko?: string;
+  zh?: string;
+  pt?: string;
+  it?: string;
+  ar?: string;
+};
 
 export type TutorialStep = {
-  id: string;
-  description: string;
-  narration: string;
-  durationSeconds: number;
+  id?: string;
+  stepNumber: number;
+  title: string;
+  description?: string;
+  narration?: string;
+  durationSeconds?: number;
+  durationSec?: number;
+  productType?: string;
+  technique?: string;
+  avoidMistake?: string;
+  proTip?: string;
+  subtitles?: SubtitlesMap;
   product?: Product;
 };
 
 export type TutorialData = {
+  id?: string;
   title: string;
-  kind: string;
+  kind?: string;
+  category?: string;
+  level?: string;
   duration: string;
+  thumbnail?: string;
+  description?: string;
+  targetSkinTypes?: string[];
+  targetConcerns?: string[];
   steps: TutorialStep[];
 };
 
-export function AIVideoPlayer({ tutorial }: { tutorial: TutorialData }) {
+export function AIVideoPlayer({ 
+  tutorial,
+  selectedLanguage = "en",
+  onStepChange
+}: { 
+  tutorial: TutorialData;
+  selectedLanguage?: string;
+  onStepChange?: (stepIdx: number) => void;
+}) {
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentStepIdx, setCurrentStepIdx] = useState(0);
   const [progress, setProgress] = useState(0);
@@ -34,11 +63,37 @@ export function AIVideoPlayer({ tutorial }: { tutorial: TutorialData }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const currentStep = tutorial.steps[currentStepIdx];
 
+  // Web Speech API Voice Narration Engine
+  useEffect(() => {
+    if (!isPlaying || isMuted || showEndSlate || !currentStep) {
+      if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+      return;
+    }
+
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.cancel(); // Clear queued audio
+      
+      const textToSpeak = currentStep.subtitles?.[selectedLanguage as keyof SubtitlesMap] || currentStep.narration || currentStep.technique || currentStep.title;
+      const utterance = new SpeechSynthesisUtterance(textToSpeak);
+      
+      // Match voice language code
+      const langCodes: Record<string, string> = {
+        en: "en-US", es: "es-ES", fr: "fr-FR", hi: "hi-IN", de: "de-DE",
+        ja: "ja-JP", ko: "ko-KR", zh: "zh-CN", pt: "pt-BR", it: "it-IT", ar: "ar-SA"
+      };
+      utterance.lang = langCodes[selectedLanguage] || "en-US";
+      utterance.rate = speed;
+
+      window.speechSynthesis.speak(utterance);
+    }
+  }, [isPlaying, currentStepIdx, selectedLanguage, isMuted, speed, showEndSlate]);
+
   // Playback engine
   useEffect(() => {
     let interval: ReturnType<typeof setInterval>;
     if (isPlaying && currentStep && !showEndSlate) {
-      const stepDurationMs = (currentStep.durationSeconds * 1000) / speed;
+      const durationSec = currentStep.durationSeconds || currentStep.durationSec || 45;
+      const stepDurationMs = (durationSec * 1000) / speed;
       const tickRate = 50; 
       const increment = (tickRate / stepDurationMs) * 100;
 
@@ -46,7 +101,9 @@ export function AIVideoPlayer({ tutorial }: { tutorial: TutorialData }) {
         setProgress((prev) => {
           if (prev + increment >= 100) {
             if (currentStepIdx < tutorial.steps.length - 1) {
-              setCurrentStepIdx((idx) => idx + 1);
+              const nextIdx = currentStepIdx + 1;
+              setCurrentStepIdx(nextIdx);
+              if (onStepChange) onStepChange(nextIdx);
               return 0; 
             } else {
               setIsPlaying(false);
@@ -58,7 +115,7 @@ export function AIVideoPlayer({ tutorial }: { tutorial: TutorialData }) {
         });
       }, tickRate);
       
-      if (videoRef.current) videoRef.current.play();
+      if (videoRef.current) videoRef.current.play().catch(() => {});
     } else {
       if (videoRef.current) videoRef.current.pause();
     }
@@ -70,6 +127,7 @@ export function AIVideoPlayer({ tutorial }: { tutorial: TutorialData }) {
       setShowEndSlate(false);
       setCurrentStepIdx(0);
       setProgress(0);
+      if (onStepChange) onStepChange(0);
     }
     setIsPlaying(!isPlaying);
   };
@@ -79,7 +137,7 @@ export function AIVideoPlayer({ tutorial }: { tutorial: TutorialData }) {
       containerRef.current?.requestFullscreen().catch(() => {});
       setIsFullscreen(true);
     } else {
-      document.exitFullscreen();
+      document.exitFullscreen().catch(() => {});
       setIsFullscreen(false);
     }
   };
@@ -89,17 +147,26 @@ export function AIVideoPlayer({ tutorial }: { tutorial: TutorialData }) {
     setProgress(0);
     setShowEndSlate(false);
     setIsPlaying(true);
+    if (onStepChange) onStepChange(idx);
   };
 
-  const totalDuration = tutorial.steps.reduce((acc, step) => acc + step.durationSeconds, 0);
-  const elapsedBeforeCurrent = tutorial.steps.slice(0, currentStepIdx).reduce((acc, step) => acc + step.durationSeconds, 0);
-  const currentElapsed = currentStep && !showEndSlate ? (progress / 100) * currentStep.durationSeconds : 0;
+  const totalDuration = tutorial.steps.reduce((acc, step) => acc + (step.durationSeconds || step.durationSec || 45), 0);
+  const elapsedBeforeCurrent = tutorial.steps.slice(0, currentStepIdx).reduce((acc, step) => acc + (step.durationSeconds || step.durationSec || 45), 0);
+  const currentStepDurationSec = currentStep ? (currentStep.durationSeconds || currentStep.durationSec || 45) : 45;
+  const currentElapsed = currentStep && !showEndSlate ? (progress / 100) * currentStepDurationSec : 0;
   const overallProgressPercent = showEndSlate ? 100 : ((elapsedBeforeCurrent + currentElapsed) / totalDuration) * 100;
 
+  // Active Subtitle Line based on language selection
+  const activeSubtitle = currentStep?.subtitles?.[selectedLanguage as keyof SubtitlesMap] 
+    || currentStep?.narration 
+    || currentStep?.technique 
+    || currentStep?.description 
+    || "Welcome to your AI personalized video tutorial.";
+
   return (
-    <div ref={containerRef} className="relative w-full aspect-video bg-black rounded-3xl overflow-hidden shadow-2xl group flex flex-col font-sans">
+    <div ref={containerRef} className="relative w-full aspect-video bg-slate-950 rounded-3xl overflow-hidden shadow-2xl group flex flex-col font-sans border border-white/10">
       
-      {/* Background AI Presenter Video Loop */}
+      {/* Background Video Loop with Ambient Glow */}
       <div className="absolute inset-0 z-0">
         <video
           ref={videoRef}
@@ -107,151 +174,131 @@ export function AIVideoPlayer({ tutorial }: { tutorial: TutorialData }) {
           loop
           muted={true}
           playsInline
-          className={`w-full h-full object-cover transition-all duration-1000 ${showEndSlate ? 'blur-xl opacity-30' : 'opacity-90'}`}
+          className={`w-full h-full object-cover transition-all duration-1000 ${showEndSlate ? 'blur-xl opacity-20' : 'opacity-85'}`}
         />
-        <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/10 to-black/40" />
+        <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/20 to-slate-950/40" />
       </div>
 
-      {/* Picture-in-Picture Product Showcase (Interactive Overlay) */}
+      {/* Live AI Selected Product Showcase */}
       <AnimatePresence>
-        {currentStep?.product && isPlaying && !showEndSlate && (
+        {(currentStep?.product || currentStep?.productType) && isPlaying && !showEndSlate && (
           <motion.div
-            initial={{ opacity: 0, x: 50, scale: 0.9, rotateY: 20 }}
-            animate={{ opacity: 1, x: 0, scale: 1, rotateY: 0 }}
-            exit={{ opacity: 0, x: 50, scale: 0.9, rotateY: 20 }}
-            transition={{ type: "spring", stiffness: 100, damping: 20 }}
-            className="absolute top-8 right-8 w-56 sm:w-72 bg-white/10 backdrop-blur-3xl border border-white/20 rounded-2xl p-5 shadow-2xl z-20"
-            style={{ perspective: 1000 }}
+            initial={{ opacity: 0, x: 40, scale: 0.95 }}
+            animate={{ opacity: 1, x: 0, scale: 1 }}
+            exit={{ opacity: 0, x: 40, scale: 0.95 }}
+            className="absolute top-6 right-6 w-56 sm:w-72 bg-slate-900/80 backdrop-blur-2xl border border-white/15 rounded-2xl p-4 shadow-2xl z-20"
           >
-            <div className="flex items-center gap-3 mb-4">
-              <Sparkles className="size-4 text-primary animate-pulse" />
-              <span className="text-xs font-semibold uppercase tracking-widest text-white/90">AI Selected</span>
+            <div className="flex items-center gap-2 mb-2">
+              <Sparkles className="size-4 text-amber-400 animate-pulse" />
+              <span className="text-[11px] font-semibold tracking-wider text-amber-300 uppercase">Dermatologist Choice</span>
             </div>
-            <div className="relative overflow-hidden rounded-xl bg-white mb-4 shadow-inner">
-              <img src={currentStep.product.image} alt={currentStep.product.name} className="w-full h-32 object-cover hover:scale-110 transition-transform duration-700" />
-            </div>
-            <h4 className="text-sm font-bold text-white leading-tight mb-2">{currentStep.product.name}</h4>
-            <div className="flex flex-col gap-1 text-xs text-white/70">
-              <span className="bg-white/10 px-2 py-1 rounded inline-block w-fit">Use: {currentStep.product.usage}</span>
-            </div>
+            {currentStep.product?.image ? (
+              <img src={currentStep.product.image} alt={currentStep.product.name} className="w-full h-24 object-cover rounded-lg mb-2 border border-white/10" />
+            ) : null}
+            <h4 className="text-xs font-semibold text-white leading-tight mb-1">{currentStep.product?.name || currentStep.productType}</h4>
+            <p className="text-[11px] text-white/70 line-clamp-2">{currentStep.technique}</p>
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* Subtitles / Script */}
-      <div className="absolute bottom-28 left-0 right-0 px-12 z-20 flex flex-col items-center pointer-events-none">
+      {/* Subtitles Overlay */}
+      <div className="absolute bottom-24 left-0 right-0 px-8 z-20 flex flex-col items-center pointer-events-none">
         <AnimatePresence mode="wait">
           {!showEndSlate && (
             <motion.div
-              key={currentStepIdx}
-              initial={{ opacity: 0, y: 10 }}
+              key={`${currentStepIdx}-${selectedLanguage}`}
+              initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-              className="bg-black/50 backdrop-blur-xl px-8 py-4 rounded-2xl border border-white/10 shadow-2xl max-w-3xl"
+              exit={{ opacity: 0, y: -8 }}
+              className="bg-slate-900/90 backdrop-blur-xl px-6 py-3 rounded-2xl border border-white/15 shadow-2xl max-w-2xl text-center"
             >
-              <p className="text-white text-lg sm:text-xl text-center font-medium drop-shadow-lg leading-relaxed">
-                {currentStep?.narration || "Welcome to your personalized consultation."}
+              <p className="text-white text-base sm:text-lg font-medium drop-shadow-md leading-snug">
+                {activeSubtitle}
               </p>
             </motion.div>
           )}
         </AnimatePresence>
       </div>
 
-      {/* End Slate: Before & After Simulation */}
+      {/* End Slate Simulation */}
       <AnimatePresence>
         {showEndSlate && (
           <motion.div 
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0 }}
-            className="absolute inset-0 z-20 flex flex-col items-center justify-center p-8 bg-black/60 backdrop-blur-sm"
+            className="absolute inset-0 z-20 flex flex-col items-center justify-center p-6 bg-slate-950/90 backdrop-blur-md text-white text-center"
           >
-            <TrendingUp className="size-16 text-primary mb-6 animate-bounce" />
-            <h2 className="text-3xl font-display text-white mb-8">AI Simulation Complete</h2>
+            <TrendingUp className="size-14 text-emerald-400 mb-4 animate-bounce" />
+            <h2 className="text-2xl sm:text-3xl font-display font-medium mb-3">Tutorial Complete! 🎉</h2>
+            <p className="text-sm text-white/70 max-w-md mb-6">
+              You have completed all {tutorial.steps.length} steps in {tutorial.title}. Consistent application yields radiant barrier repair.
+            </p>
             
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-6 max-w-4xl w-full">
-              <div className="p-6 rounded-3xl bg-white/10 border border-white/20 text-center backdrop-blur-md">
-                <p className="eyebrow text-white/70 mb-2">Current</p>
-                <p className="font-display text-5xl font-semibold text-white">{skinAnalysis.healthScore}</p>
-              </div>
-              <div className="p-6 rounded-3xl bg-primary/20 border border-primary/50 text-center backdrop-blur-md">
-                <p className="eyebrow text-primary-foreground mb-2">7 Days</p>
-                <p className="font-display text-5xl font-semibold text-white">+{Math.round((100 - skinAnalysis.healthScore) * 0.15)}</p>
-              </div>
-              <div className="p-6 rounded-3xl bg-primary/30 border border-primary/60 text-center backdrop-blur-md">
-                <p className="eyebrow text-primary-foreground mb-2">30 Days</p>
-                <p className="font-display text-5xl font-semibold text-white">+{Math.round((100 - skinAnalysis.healthScore) * 0.45)}</p>
-              </div>
-              <div className="p-6 rounded-3xl bg-primary/40 border border-primary/70 text-center backdrop-blur-md shadow-[0_0_30px_rgba(var(--primary),0.3)]">
-                <p className="eyebrow text-primary-foreground mb-2">90 Days</p>
-                <p className="font-display text-5xl font-semibold text-white">+{Math.round((100 - skinAnalysis.healthScore) * 0.75)}</p>
-              </div>
-            </div>
-            
-            <Button size="lg" className="mt-10 rounded-full" onClick={togglePlay}>
-              <RotateCcw className="size-4 mr-2" /> Restart Tutorial
+            <Button size="lg" className="rounded-full bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-semibold" onClick={togglePlay}>
+              <RotateCcw className="size-4 mr-2" /> Replay Video Tutorial
             </Button>
-            <p className="text-white/50 text-xs mt-6">This is an AI simulation. Actual results may vary based on adherence to routine.</p>
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* Interactive Chapters UI */}
-      <div className="absolute top-6 left-6 right-6 z-30 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+      {/* Step Indicator Progress Bar */}
+      <div className="absolute top-4 left-4 right-4 z-30 flex gap-1.5 opacity-90">
         {tutorial.steps.map((step, idx) => (
           <button
-            key={step.id}
+            key={idx}
             onClick={() => jumpToStep(idx)}
-            className={`h-2 flex-1 rounded-full transition-all duration-300 ${idx < currentStepIdx || showEndSlate ? 'bg-primary' : idx === currentStepIdx ? 'bg-primary/50' : 'bg-white/20'}`}
+            className={`h-1.5 flex-1 rounded-full transition-all duration-300 ${idx < currentStepIdx || showEndSlate ? 'bg-amber-400' : idx === currentStepIdx ? 'bg-amber-400/60' : 'bg-white/20'}`}
           />
         ))}
       </div>
 
-      {/* Main Overlay UI Controls */}
+      {/* Top Header Overlay Controls */}
       <div className="absolute inset-0 z-10 flex flex-col justify-between p-6 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none">
-        <div className="flex justify-between items-start pointer-events-auto mt-6">
-          <div className="bg-black/60 backdrop-blur-md px-5 py-2.5 rounded-full border border-white/20">
-            <h3 className="text-white font-medium text-sm flex items-center gap-2">
-              <CheckCircle2 className="size-4 text-primary" />
-              {showEndSlate ? "Simulation Complete" : `Step ${currentStepIdx + 1} of ${tutorial.steps.length}`}
+        <div className="flex justify-between items-center pointer-events-auto mt-4">
+          <div className="bg-slate-900/80 backdrop-blur-md px-4 py-1.5 rounded-full border border-white/20">
+            <h3 className="text-white font-medium text-xs flex items-center gap-2">
+              <CheckCircle2 className="size-3.5 text-amber-400" />
+              {showEndSlate ? "Completed" : `Step ${currentStepIdx + 1} of ${tutorial.steps.length}: ${currentStep?.title}`}
             </h3>
           </div>
           <div className="flex gap-2">
-            <Button variant="ghost" size="icon" className="text-white hover:bg-white/20 rounded-full bg-black/40 backdrop-blur-md" onClick={() => setIsMuted(!isMuted)}>
-              {isMuted ? <VolumeX className="size-5" /> : <Volume2 className="size-5" />}
+            <Button variant="ghost" size="icon" className="text-white hover:bg-white/20 rounded-full bg-slate-900/60 backdrop-blur-md size-9" onClick={() => setIsMuted(!isMuted)}>
+              {isMuted ? <VolumeX className="size-4" /> : <Volume2 className="size-4" />}
             </Button>
-            <Button variant="ghost" size="icon" className="text-white hover:bg-white/20 rounded-full bg-black/40 backdrop-blur-md" onClick={() => setSpeed(s => s === 1 ? 1.5 : s === 1.5 ? 2 : 1)}>
+            <Button variant="ghost" size="icon" className="text-white hover:bg-white/20 rounded-full bg-slate-900/60 backdrop-blur-md size-9" onClick={() => setSpeed(s => s === 1 ? 1.25 : s === 1.25 ? 1.5 : 1)}>
               <span className="text-xs font-bold">{speed}x</span>
             </Button>
           </div>
         </div>
       </div>
 
-      {/* Bottom Control Bar */}
-      <div className="absolute bottom-0 left-0 right-0 z-30 p-8 bg-gradient-to-t from-black via-black/80 to-transparent">
-        <div className="w-full h-2 bg-white/20 rounded-full overflow-hidden mb-6 relative cursor-pointer">
+      {/* Bottom Scrubber & Controls */}
+      <div className="absolute bottom-0 left-0 right-0 z-30 p-6 bg-gradient-to-t from-slate-950 via-slate-950/80 to-transparent">
+        <div className="w-full h-1.5 bg-white/20 rounded-full overflow-hidden mb-4 relative cursor-pointer">
           <div 
-            className="absolute top-0 left-0 h-full bg-primary transition-all ease-linear shadow-[0_0_10px_rgba(var(--primary),0.8)]"
+            className="absolute top-0 left-0 h-full bg-amber-400 transition-all ease-linear"
             style={{ width: `${overallProgressPercent}%` }}
           />
         </div>
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-6">
+          <div className="flex items-center gap-4">
             <Button 
               variant="default" 
               size="icon" 
-              className="rounded-full w-14 h-14 bg-white text-black hover:bg-white/90 shadow-xl"
+              className="rounded-full size-11 bg-white text-slate-950 hover:bg-white/90 shadow-xl"
               onClick={togglePlay}
             >
-              {isPlaying ? <Pause className="size-6 text-black" /> : showEndSlate ? <RotateCcw className="size-6 text-black" /> : <Play className="size-6 text-black ml-1" />}
+              {isPlaying ? <Pause className="size-5 text-slate-950" /> : showEndSlate ? <RotateCcw className="size-5 text-slate-950" /> : <Play className="size-5 text-slate-950 ml-0.5" />}
             </Button>
             <div className="text-white">
-              <p className="text-lg font-semibold tracking-wide drop-shadow-md">{showEndSlate ? "AI Results Prediction" : currentStep?.description}</p>
+              <p className="text-sm font-semibold tracking-wide">{showEndSlate ? "Tutorial Complete" : currentStep?.title}</p>
+              <p className="text-xs text-white/70">{currentStep?.productType || "Step Walkthrough"}</p>
             </div>
           </div>
-          <div className="flex items-center gap-3">
-            <Button variant="ghost" size="icon" className="text-white hover:bg-white/20 rounded-full bg-black/40 backdrop-blur-md" onClick={toggleFullscreen}>
-              <Maximize className="size-5" />
+          <div className="flex items-center gap-2">
+            <Button variant="ghost" size="icon" className="text-white hover:bg-white/20 rounded-full bg-slate-900/60 backdrop-blur-md size-9" onClick={toggleFullscreen}>
+              <Maximize className="size-4" />
             </Button>
           </div>
         </div>
